@@ -156,9 +156,9 @@ def gen_evaluate_fn(
     def evaluate(server_round: int, parameters_ndarrays: NDArrays, config: Dict[str, Scalar]) -> Optional[Tuple[float, Dict[str, Scalar]]]:
         # pylint: disable=unused-argument
         net = instantiate(model)
-        params_dict = zip(net.state_dict().keys(), parameters_ndarrays)
-        state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
-        net.load_state_dict(state_dict, strict=True)
+        params_dict = zip(net.state_dict().keys(), parameters_ndarrays) 
+        state_dict = OrderedDict({k: torch.from_numpy(v).detach().clone() for k, v in params_dict}) 
+        net.load_state_dict(state_dict)#, strict=True)
         net.to(device)
 
         loss, accuracy = test(net, testloader, device=device)
