@@ -3,11 +3,12 @@
 from typing import List, Tuple
 
 import numpy as np
-import torch
+import torch, h5py
+import pandas as pd
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torch.autograd import Variable
-from torch.utils.data import ConcatDataset, Dataset, Subset
+from torch.utils.data import ConcatDataset, Dataset, Subset, TensorDataset, random_split
 from torchvision.datasets import CIFAR10, MNIST, FashionMNIST
 
 
@@ -100,11 +101,27 @@ def _download_data(dataset_name="emnist") -> Tuple[Dataset, Dataset]:
             download=True,
             transform=transform_test,
         )
+    elif dataset_name == "code15":
+        filepath = "../data/code15-12l/exams_part0.hdf5" # TODO later, make this as a for-loop with all 17 parts of CODE15%
+        prefix = filepath.replace("data/code15-12l/", "").replace(".hdf5", "")
+        path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
+        
+        # load traces
+        f = h5py.File(path_to_h5_train, 'r')
+        traces = torch.tensor(f['tracings'][()], dtype=torch.float32)[:-1,:,:]
+        
+        # load labels
+        df = pd.read_csv(path_to_csv_train)
+        df.set_index('exam_id', inplace=True)
+        df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
+        labels = torch.tensor(np.array(df['AF'], dtype=np.float32), dtype=torch.float32).reshape(-1,1)
+        
+        dataset = TensorDataset(traces, labels)
+        trainset, testset = random_split(dataset, lengths=[0.7,0.3])
     else:
         raise NotImplementedError
 
     return trainset, testset
-
 
 # pylint: disable=too-many-locals
 def partition_data(
@@ -132,8 +149,9 @@ def partition_data(
     s_fraction = int(similarity * len(trainset))
     prng = np.random.default_rng(seed)
     idxs = prng.choice(len(trainset), s_fraction, replace=False)
-    iid_trainset = Subset(trainset, idxs)
-    rem_trainset = Subset(trainset, np.setdiff1d(np.arange(len(trainset)), idxs))
+    iid_trainset = Subset(trainset, idxs) # s*idxs
+    rem_trainset = Subset(trainset, np.setdiff1d(np.arange(len(trainset)), idxs)) # (1-s)*idxs
+    # s*idxs + (1-s)*idxs = len(trainset)
 
     # sample iid data per client from iid_trainset
     all_ids = np.arange(len(iid_trainset))

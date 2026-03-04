@@ -64,7 +64,8 @@ def load_datasets(
             seed=seed,
             dataset_name=config.name,
         )
-    elif partitioning == "iid":
+    # both this and below call the same function! only difference is similarity value for non-IID.
+    elif partitioning == "iid": 
         datasets, testset = partition_data(
             num_clients,
             similarity=1.0,

@@ -5,6 +5,8 @@ from typing import Callable, Dict, List, OrderedDict
 import flwr as fl
 import torch
 from flwr.common import Scalar, Context
+from typing import Dict, List, Union, Optional, Tuple
+from flwr.common.typing import NDArrays
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
@@ -128,3 +130,38 @@ def gen_client_fn(
         ).to_client()
 
     return client_fn
+
+#################### brought from server_scaffold.py
+def gen_evaluate_fn(
+    testloader: DataLoader,
+    device: torch.device,
+    model: DictConfig,
+) -> Callable[[int, NDArrays, Dict[str, Scalar]], Optional[Tuple[float, Dict[str, Scalar]]]]:
+    """Generate the function for centralized evaluation.
+
+    Parameters
+    ----------
+    testloader : DataLoader
+        The dataloader to test the model with.
+    device : torch.device
+        The device to test the model on.
+
+    Returns
+    -------
+    Callable[ [int, NDArrays, Dict[str, Scalar]],
+               Optional[Tuple[float, Dict[str, Scalar]]] ]
+    The centralized evaluation function.
+    """
+
+    def evaluate(server_round: int, parameters_ndarrays: NDArrays, config: Dict[str, Scalar]) -> Optional[Tuple[float, Dict[str, Scalar]]]:
+        # pylint: disable=unused-argument
+        net = instantiate(model)
+        params_dict = zip(net.state_dict().keys(), parameters_ndarrays)
+        state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+        net.load_state_dict(state_dict, strict=True)
+        net.to(device)
+
+        loss, accuracy = test(net, testloader, device=device)
+        return loss, {"accuracy": accuracy}
+
+    return evaluate

@@ -17,7 +17,9 @@ from omegaconf import DictConfig, OmegaConf
 
 from niid_bench.dataset import load_datasets
 #from niid_bench.server_fednova import FedNovaServer
-from niid_bench.server_scaffold import ScaffoldServer, gen_evaluate_fn
+from niid_bench.models import test
+from niid_bench.client_fedavg import gen_evaluate_fn # should later be changed to a new server file for fedavg
+from niid_bench.server_scaffold import ScaffoldServer#, gen_evaluate_fn
 from niid_bench.strategy import FedNovaStrategy, ScaffoldStrategy
 
 
