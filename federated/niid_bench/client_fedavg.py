@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, OrderedDict
 
 import flwr as fl
 import torch
-from flwr.common import Scalar
+from flwr.common import Scalar, Context
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
@@ -125,6 +125,6 @@ def gen_client_fn(
             learning_rate,
             momentum,
             weight_decay,
-        )
+        ).to_client()
 
     return client_fn

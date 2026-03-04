@@ -8,7 +8,7 @@ num_epochs: 10
 batch_size: 64
 clients_per_round: 10
 learning_rate: 0.01
-num_rounds: 50
+num_rounds: 1 # 50
 partitioning: "dirichlet"
 dataset_name: "cifar10"
 dataset_seed: 42

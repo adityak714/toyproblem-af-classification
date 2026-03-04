@@ -16,7 +16,7 @@ from hydra.utils import call, instantiate
 from omegaconf import DictConfig, OmegaConf
 
 from niid_bench.dataset import load_datasets
-from niid_bench.server_fednova import FedNovaServer
+#from niid_bench.server_fednova import FedNovaServer
 from niid_bench.server_scaffold import ScaffoldServer, gen_evaluate_fn
 from niid_bench.strategy import FedNovaStrategy, ScaffoldStrategy
 
