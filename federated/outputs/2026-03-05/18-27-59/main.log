@@ -1,0 +1,279 @@
+[2026-03-05 18:28:15,606][flwr][WARNING] - DEPRECATED FEATURE: flwr.simulation.start_simulation() is deprecated.
+	Instead, use the `flwr run` CLI command to start a local simulation in your Flower app, as shown for example below:
+
+		$ flwr new  # Create a new Flower app from a template
+
+		$ flwr run  # Run the Flower app in Simulation Mode
+
+	Using `start_simulation()` is deprecated.
+
+            This is a deprecated feature. It will be removed
+            entirely in future versions of Flower.
+        
+[2026-03-05 18:28:15,607][flwr][WARNING] - Both server and strategy were provided, ignoring strategy
+[2026-03-05 18:28:15,607][flwr][INFO] - Starting Flower simulation, config: num_rounds=2, no round_timeout
+[2026-03-05 18:28:15,777][flwr][INFO] - Flower VCE: Ray initialized with resources: {'GPU': 12.0, 'memory': 563872354305.0, 'node:10.21.30.129': 1.0, 'accelerator_type:A40': 3.0, 'CPU': 192.0, 'object_store_memory': 241659580415.0, 'node:__internal_head__': 1.0, 'node:10.21.30.127': 1.0, 'node:10.21.30.190': 1.0}
+[2026-03-05 18:28:15,777][flwr][INFO] - Optimize your simulation with Flower VCE: https://flower.ai/docs/framework/how-to-run-simulations.html
+[2026-03-05 18:28:15,777][flwr][INFO] - Flower VCE: Resources for each Virtual Client: {'num_cpus': 32, 'num_gpus': 4}
+[2026-03-05 18:28:15,794][flwr][INFO] - Flower VCE: Creating VirtualClientEngineActorPool with 3 actors
+[2026-03-05 18:28:15,794][flwr][INFO] - [INIT]
+[2026-03-05 18:28:15,794][flwr][INFO] - Requesting initial parameters from one random client
+[2026-03-05 18:28:27,593][flwr][INFO] - Received initial parameters from one random client
+[2026-03-05 18:28:27,594][flwr][INFO] - Starting evaluation of initial global parameters
+[2026-03-05 18:28:31,437][flwr][INFO] - initial parameters (loss, other metrics): 0.7151420712471008, {'accuracy': 0.028987628504987872}
+[2026-03-05 18:28:31,437][flwr][INFO] - 
+[2026-03-05 18:28:31,437][flwr][INFO] - [ROUND 1]
+[2026-03-05 18:28:31,438][flwr][INFO] - configure_fit: strategy sampled 1 clients (out of 2)
+[2026-03-05 18:28:37,598][flwr][ERROR] - Traceback (most recent call last):
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_client_proxy.py", line 90, in _submit_job
+    out_mssg, updated_context = self.actor_pool.get_client_result(
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_actor.py", line 400, in get_client_result
+    return self._fetch_future_result(cid)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_actor.py", line 281, in _fetch_future_result
+    res_cid, out_mssg, updated_context = ray.get(
+                                         ^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/auto_init_hook.py", line 22, in auto_init_wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/client_mode_hook.py", line 104, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/worker.py", line 2981, in get
+    values, debugger_breakpoint = worker.get_objects(
+                                  ^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/worker.py", line 1012, in get_objects
+    raise value.as_instanceof_cause()
+ray.exceptions.RayTaskError(ClientAppException): [36mray::ClientAppActor.run()[39m (pid=633818, ip=10.21.30.190, actor_id=b301dda3a76cbc9c8e68a8d305000000, repr=<flwr.simulation.ray_transport.ray_actor.ClientAppActor object at 0x1513e07515b0>)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/clientapp/client_app.py", line 144, in __call__
+    return self._call(message, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/clientapp/client_app.py", line 128, in ffn
+    out_message = handle_legacy_message_from_msgtype(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/message_handler/message_handler.py", line 129, in handle_legacy_message_from_msgtype
+    fit_res = maybe_call_fit(
+              ^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/client.py", line 224, in maybe_call_fit
+    return client.fit(fit_ins)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/numpy_client.py", line 227, in _fit
+    results = self.numpy_client.fit(parameters, ins.config)  # type: ignore
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/naiss2024-5-153/Aditya/1-starter-ecg-model/federated/niid_bench/client_fedavg.py", line 54, in fit
+    self.set_parameters(parameters)
+  File "/mimer/NOBACKUP/groups/naiss2024-5-153/Aditya/1-starter-ecg-model/federated/niid_bench/client_fedavg.py", line 50, in set_parameters
+    self.net.load_state_dict(state_dict, strict=True)
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2604, in load_state_dict
+    load(self, state_dict)
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2592, in load
+    load(child, child_state_dict, child_prefix)  # noqa: F821
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2592, in load
+    load(child, child_state_dict, child_prefix)  # noqa: F821
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2575, in load
+    module._load_from_state_dict(
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/batchnorm.py", line 132, in _load_from_state_dict
+    super()._load_from_state_dict(
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2426, in _load_from_state_dict
+    input_param = input_param[0]
+                  ~~~~~~~~~~~^^^
+IndexError: index 0 is out of bounds for dimension 0 with size 0
+
+The above exception was the direct cause of the following exception:
+
+[36mray::ClientAppActor.run()[39m (pid=633818, ip=10.21.30.190, actor_id=b301dda3a76cbc9c8e68a8d305000000, repr=<flwr.simulation.ray_transport.ray_actor.ClientAppActor object at 0x1513e07515b0>)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_actor.py", line 65, in run
+    raise ClientAppException(str(ex)) from ex
+flwr.clientapp.client_app.ClientAppException: 
+Exception ClientAppException occurred. Message: index 0 is out of bounds for dimension 0 with size 0
+
+[2026-03-05 18:28:37,598][flwr][ERROR] - [36mray::ClientAppActor.run()[39m (pid=633818, ip=10.21.30.190, actor_id=b301dda3a76cbc9c8e68a8d305000000, repr=<flwr.simulation.ray_transport.ray_actor.ClientAppActor object at 0x1513e07515b0>)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/clientapp/client_app.py", line 144, in __call__
+    return self._call(message, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/clientapp/client_app.py", line 128, in ffn
+    out_message = handle_legacy_message_from_msgtype(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/message_handler/message_handler.py", line 129, in handle_legacy_message_from_msgtype
+    fit_res = maybe_call_fit(
+              ^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/client.py", line 224, in maybe_call_fit
+    return client.fit(fit_ins)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/numpy_client.py", line 227, in _fit
+    results = self.numpy_client.fit(parameters, ins.config)  # type: ignore
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/naiss2024-5-153/Aditya/1-starter-ecg-model/federated/niid_bench/client_fedavg.py", line 54, in fit
+    self.set_parameters(parameters)
+  File "/mimer/NOBACKUP/groups/naiss2024-5-153/Aditya/1-starter-ecg-model/federated/niid_bench/client_fedavg.py", line 50, in set_parameters
+    self.net.load_state_dict(state_dict, strict=True)
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2604, in load_state_dict
+    load(self, state_dict)
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2592, in load
+    load(child, child_state_dict, child_prefix)  # noqa: F821
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2592, in load
+    load(child, child_state_dict, child_prefix)  # noqa: F821
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2575, in load
+    module._load_from_state_dict(
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/batchnorm.py", line 132, in _load_from_state_dict
+    super()._load_from_state_dict(
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2426, in _load_from_state_dict
+    input_param = input_param[0]
+                  ~~~~~~~~~~~^^^
+IndexError: index 0 is out of bounds for dimension 0 with size 0
+
+The above exception was the direct cause of the following exception:
+
+[36mray::ClientAppActor.run()[39m (pid=633818, ip=10.21.30.190, actor_id=b301dda3a76cbc9c8e68a8d305000000, repr=<flwr.simulation.ray_transport.ray_actor.ClientAppActor object at 0x1513e07515b0>)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_actor.py", line 65, in run
+    raise ClientAppException(str(ex)) from ex
+flwr.clientapp.client_app.ClientAppException: 
+Exception ClientAppException occurred. Message: index 0 is out of bounds for dimension 0 with size 0
+[2026-03-05 18:28:37,599][flwr][INFO] - aggregate_fit: received 0 results and 1 failures
+[2026-03-05 18:28:39,895][flwr][INFO] - fit progress: (1, 0.7151420712471008, {'accuracy': 0.028987628504987872}, 8.457021287002135)
+[2026-03-05 18:28:39,895][flwr][INFO] - configure_evaluate: no clients selected, skipping evaluation
+[2026-03-05 18:28:39,895][flwr][INFO] - 
+[2026-03-05 18:28:39,895][flwr][INFO] - [ROUND 2]
+[2026-03-05 18:28:39,895][flwr][INFO] - configure_fit: strategy sampled 1 clients (out of 2)
+[2026-03-05 18:28:46,142][flwr][ERROR] - Traceback (most recent call last):
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_client_proxy.py", line 90, in _submit_job
+    out_mssg, updated_context = self.actor_pool.get_client_result(
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_actor.py", line 400, in get_client_result
+    return self._fetch_future_result(cid)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_actor.py", line 281, in _fetch_future_result
+    res_cid, out_mssg, updated_context = ray.get(
+                                         ^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/auto_init_hook.py", line 22, in auto_init_wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/client_mode_hook.py", line 104, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/worker.py", line 2981, in get
+    values, debugger_breakpoint = worker.get_objects(
+                                  ^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/worker.py", line 1012, in get_objects
+    raise value.as_instanceof_cause()
+ray.exceptions.RayTaskError(ClientAppException): [36mray::ClientAppActor.run()[39m (pid=633818, ip=10.21.30.190, actor_id=b301dda3a76cbc9c8e68a8d305000000, repr=<flwr.simulation.ray_transport.ray_actor.ClientAppActor object at 0x1513e07515b0>)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/clientapp/client_app.py", line 144, in __call__
+    return self._call(message, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/clientapp/client_app.py", line 128, in ffn
+    out_message = handle_legacy_message_from_msgtype(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/message_handler/message_handler.py", line 129, in handle_legacy_message_from_msgtype
+    fit_res = maybe_call_fit(
+              ^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/client.py", line 224, in maybe_call_fit
+    return client.fit(fit_ins)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/numpy_client.py", line 227, in _fit
+    results = self.numpy_client.fit(parameters, ins.config)  # type: ignore
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/naiss2024-5-153/Aditya/1-starter-ecg-model/federated/niid_bench/client_fedavg.py", line 54, in fit
+    self.set_parameters(parameters)
+  File "/mimer/NOBACKUP/groups/naiss2024-5-153/Aditya/1-starter-ecg-model/federated/niid_bench/client_fedavg.py", line 50, in set_parameters
+    self.net.load_state_dict(state_dict, strict=True)
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2604, in load_state_dict
+    load(self, state_dict)
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2592, in load
+    load(child, child_state_dict, child_prefix)  # noqa: F821
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2592, in load
+    load(child, child_state_dict, child_prefix)  # noqa: F821
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2575, in load
+    module._load_from_state_dict(
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/batchnorm.py", line 132, in _load_from_state_dict
+    super()._load_from_state_dict(
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2426, in _load_from_state_dict
+    input_param = input_param[0]
+                  ~~~~~~~~~~~^^^
+IndexError: index 0 is out of bounds for dimension 0 with size 0
+
+The above exception was the direct cause of the following exception:
+
+[36mray::ClientAppActor.run()[39m (pid=633818, ip=10.21.30.190, actor_id=b301dda3a76cbc9c8e68a8d305000000, repr=<flwr.simulation.ray_transport.ray_actor.ClientAppActor object at 0x1513e07515b0>)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_actor.py", line 65, in run
+    raise ClientAppException(str(ex)) from ex
+flwr.clientapp.client_app.ClientAppException: 
+Exception ClientAppException occurred. Message: index 0 is out of bounds for dimension 0 with size 0
+
+[2026-03-05 18:28:46,143][flwr][ERROR] - [36mray::ClientAppActor.run()[39m (pid=633818, ip=10.21.30.190, actor_id=b301dda3a76cbc9c8e68a8d305000000, repr=<flwr.simulation.ray_transport.ray_actor.ClientAppActor object at 0x1513e07515b0>)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/clientapp/client_app.py", line 144, in __call__
+    return self._call(message, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/clientapp/client_app.py", line 128, in ffn
+    out_message = handle_legacy_message_from_msgtype(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/message_handler/message_handler.py", line 129, in handle_legacy_message_from_msgtype
+    fit_res = maybe_call_fit(
+              ^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/client.py", line 224, in maybe_call_fit
+    return client.fit(fit_ins)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/client/numpy_client.py", line 227, in _fit
+    results = self.numpy_client.fit(parameters, ins.config)  # type: ignore
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/naiss2024-5-153/Aditya/1-starter-ecg-model/federated/niid_bench/client_fedavg.py", line 54, in fit
+    self.set_parameters(parameters)
+  File "/mimer/NOBACKUP/groups/naiss2024-5-153/Aditya/1-starter-ecg-model/federated/niid_bench/client_fedavg.py", line 50, in set_parameters
+    self.net.load_state_dict(state_dict, strict=True)
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2604, in load_state_dict
+    load(self, state_dict)
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2592, in load
+    load(child, child_state_dict, child_prefix)  # noqa: F821
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2592, in load
+    load(child, child_state_dict, child_prefix)  # noqa: F821
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2575, in load
+    module._load_from_state_dict(
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/batchnorm.py", line 132, in _load_from_state_dict
+    super()._load_from_state_dict(
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/torch/nn/modules/module.py", line 2426, in _load_from_state_dict
+    input_param = input_param[0]
+                  ~~~~~~~~~~~^^^
+IndexError: index 0 is out of bounds for dimension 0 with size 0
+
+The above exception was the direct cause of the following exception:
+
+[36mray::ClientAppActor.run()[39m (pid=633818, ip=10.21.30.190, actor_id=b301dda3a76cbc9c8e68a8d305000000, repr=<flwr.simulation.ray_transport.ray_actor.ClientAppActor object at 0x1513e07515b0>)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/flwr/simulation/ray_transport/ray_actor.py", line 65, in run
+    raise ClientAppException(str(ex)) from ex
+flwr.clientapp.client_app.ClientAppException: 
+Exception ClientAppException occurred. Message: index 0 is out of bounds for dimension 0 with size 0
+[2026-03-05 18:28:46,143][flwr][INFO] - aggregate_fit: received 0 results and 1 failures
+[2026-03-05 18:28:47,945][flwr][INFO] - fit progress: (2, 0.7151420712471008, {'accuracy': 0.028987628504987872}, 16.507863195991376)
+[2026-03-05 18:28:47,945][flwr][INFO] - configure_evaluate: no clients selected, skipping evaluation
+[2026-03-05 18:28:47,946][flwr][INFO] - 
+[2026-03-05 18:28:47,946][flwr][INFO] - [SUMMARY]
+[2026-03-05 18:28:47,946][flwr][INFO] - Run finished 2 round(s) in 16.51s
+[2026-03-05 18:28:47,946][flwr][INFO] - 	History (loss, centralized):
+[2026-03-05 18:28:47,946][flwr][INFO] - 		round 0: 0.7151420712471008
+[2026-03-05 18:28:47,946][flwr][INFO] - 		round 1: 0.7151420712471008
+[2026-03-05 18:28:47,946][flwr][INFO] - 		round 2: 0.7151420712471008
+[2026-03-05 18:28:47,946][flwr][INFO] - 	History (metrics, centralized):
+[2026-03-05 18:28:47,946][flwr][INFO] - 	{'accuracy': [(0, 0.028987628504987872),
+[2026-03-05 18:28:47,946][flwr][INFO] - 	              (1, 0.028987628504987872),
+[2026-03-05 18:28:47,946][flwr][INFO] - 	              (2, 0.028987628504987872)]}
+[2026-03-05 18:28:47,946][flwr][INFO] - 
