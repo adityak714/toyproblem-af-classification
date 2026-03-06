@@ -1,7 +1,7 @@
 """Implement the neural network models and training functions."""
-
+from tqdm.notebook import trange, tqdm
 from typing import List, Tuple
-
+from sklearn.metrics import average_precision_score
 import numpy as np
 import torch
 import torch.nn as nn
@@ -110,7 +110,7 @@ class ResNet1d(nn.Module):
     # list(zip([64, 128, 196, 256, 320], [4096, 1024, 256, 64, 16]))
     def __init__(self, n_classes, 
                  input_dim=(12, 4096), 
-                 blocks_dim=list(zip([64, 128, 196, 256, 320], [4096, 1024, 256, 64, 16])), 
+                 blocks_dim=list(zip([64, 128, 320], [4096, 1024, 16])), 
                  kernel_size=17, 
                  dropout_rate=0.4):
         super(ResNet1d, self).__init__()
@@ -319,11 +319,13 @@ def _train_one_epoch_scaffold(
 def train_fedavg(
     net: nn.Module,
     trainloader: DataLoader,
-    device: torch.device,
+    rank: int,
+    world_size: int,
     epochs: int,
     learning_rate: float,
     momentum: float,
     weight_decay: float,
+    device=torch.device("cuda:0"),
 ) -> None:
     # pylint: disable=too-many-arguments
     """Train the network on the training set using FedAvg.
@@ -349,18 +351,18 @@ def train_fedavg(
     -------
     None
     """
+    ## TODO: ddp_setup() and destroy_process_group things here ...
     criterion = nn.BCEWithLogitsLoss()
     optimizer = Adam(net.parameters(), lr=learning_rate) #,weight_decay=weight_decay)
     #optimizer = SGD(net.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
-    #net.train()
-    for _ in range(epochs):
-        net = _train_one_epoch(net, trainloader, device, criterion, optimizer)
-
+    for i in range(epochs):
+        net = _train_one_epoch(net, trainloader, rank, criterion, optimizer)
+        # when saving checkpoints, then run self.gpu_id, or torch.cuda.device_count and make sure it is 0
 
 def _train_one_epoch(
-    net: nn.Module,
+    net #: nn.Module >> changed to DDP for parallellization,
     trainloader: DataLoader,
-    device: torch.device,
+    device: int, # torch.device
     criterion: nn.Module,
     optimizer: Optimizer,
 ) -> nn.Module:
@@ -373,16 +375,29 @@ def _train_one_epoch(
     #    loss.backward()
     #    optimizer.step()
     #return net
+    tqdm.write("Training model...")
+    train_pbar = tqdm(trainloader, desc="Training Epoch {epoch:2d}".format(epoch=1), leave=True)
+    total_loss, n_entries = 0, 0
+    
     net.train()
-    sigmoid = nn.Sigmoid().to(device)
-    for x,y in dataloader:
-        x, y = x.to(device), y.to(device)
-        pred = net(x)
-        curr_loss = criterion(pred, y)
-        curr_loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
+    #sigmoid = nn.Sigmoid().to(device)
+    for traces, diagnoses in train_pbar:
+        traces, diagnoses = traces.to(device), diagnoses.to(device)
+        #net = net.module
+        for x,y in trainloader:
+            x, y = x.to(device), y.to(device)
+            pred = net(x)
+            curr_loss = criterion(pred, y)
+            curr_loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        
+        total_loss += curr_loss.detach().cpu().numpy()
+        n_entries += len(traces)
+        
+        train_pbar.set_postfix({'loss': total_loss / n_entries})
+    train_pbar.close()
+    
     return net
 
 def train_fedprox(
@@ -538,12 +553,14 @@ def _train_one_epoch_fednova(
     return net, local_steps
 
 
-def test(net: nn.Module, testloader: DataLoader, device: torch.device) -> Tuple[float, float]:
+def test(
+        net, testloader: DataLoader, device: int # bc. rank >> before, used to be torch.device
+) -> Tuple[float, float]:
     """Evaluate the network on the test set.
     ----------
     Parameters
     ----------
-    net : nn.Module
+    net : nn.Module >>>> now changed to DDP for parallellization
         The neural network to evaluate.
     testloader : DataLoader
         The test set dataloader object.
@@ -555,9 +572,11 @@ def test(net: nn.Module, testloader: DataLoader, device: torch.device) -> Tuple[
     Tuple[float, float]
         The loss and accuracy of the network on the test set.
     """
+    ## TODO: do ddp_setup() and destroy_process() things ...
+    net.to(device)
     net.eval()
     criterion = nn.BCEWithLogitsLoss() # nn.CrossEntropyLoss(reduction="sum")
-    #correct, total, loss = 0, 0, 0.0
+    loss = 0.0
     sigmoid = nn.Sigmoid().to(device)
     avg_precisions = []  # avg precision (pr-auc)
 
@@ -568,7 +587,7 @@ def test(net: nn.Module, testloader: DataLoader, device: torch.device) -> Tuple[
             loss += criterion(output, target).item()
             if len(np.unique(target.cpu())) == 2: # if both positive and negative truth values are present, compute the avg. precision
                     avg_precisions.append(average_precision_score(target.cpu(), sigmoid(output).cpu()))
-            
+    # THIS MAY NEED THE world_size ALSO. Check with FlowerFedAvgClient's evaluate() function, as it basically calls this function! 
     loss = loss / len(testloader)
     ap = np.mean(avg_precisions)
     return loss, ap

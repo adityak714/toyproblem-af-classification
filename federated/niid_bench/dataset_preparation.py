@@ -102,20 +102,21 @@ def _download_data(dataset_name="emnist") -> Tuple[Dataset, Dataset]:
             transform=transform_test,
         )
     elif dataset_name == "code15":
+        print("Loading hdf5 ...")
         filepath = "../data/code15-12l/exams_part0.hdf5" # TODO later, make this as a for-loop with all 17 parts of CODE15%
         prefix = filepath.replace("data/code15-12l/", "").replace(".hdf5", "")
         path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
-        
+        print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
         # load traces
         f = h5py.File(path_to_h5_train, 'r')
         traces = torch.tensor(f['tracings'][()], dtype=torch.float32)[:-1,:,:]
-        
+        print("traces successfully converted to tensors ...")
         # load labels
         df = pd.read_csv(path_to_csv_train)
         df.set_index('exam_id', inplace=True)
         df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
         labels = torch.tensor(np.array(df['AF'], dtype=np.float32), dtype=torch.float32).reshape(-1,1)
-        
+        print("reindexing of the csv for the given chunk of code15% successful ... now splitting train-test ...")
         dataset = TensorDataset(traces, labels)
         trainset, testset = random_split(dataset, lengths=[0.7,0.3])
     else:

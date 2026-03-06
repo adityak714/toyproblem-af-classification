@@ -6,7 +6,7 @@ model is going to be evaluated, etc. At the end, this script saves the results.
 
 import os
 import pickle
-
+import time
 import flwr as fl
 import hydra
 from flwr.server.client_manager import SimpleClientManager
@@ -22,6 +22,17 @@ from niid_bench.client_fedavg import gen_evaluate_fn # should later be changed t
 from niid_bench.server_scaffold import ScaffoldServer#, gen_evaluate_fn
 from niid_bench.strategy import FedNovaStrategy, ScaffoldStrategy
 
+import torch
+import torch.multiprocessing as mp
+from torch.utils.data import DataLoader
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
+
+def ddp_setup(rank, world_size):
+    os.environ["MASTER_ADDR"] = "10.21.30.152"
+    os.environ["MASTER_PORT"] ) "12355"
+    init_process_group(backend="nccl", # nvidia comm library (backend for distr. comm. across CUDA GPUs
+            rank=rank, world_size=world_size)
 
 @hydra.main(config_path="conf", config_name="fedavg_base", version_base=None)
 def main(cfg: DictConfig) -> None:
@@ -46,6 +57,8 @@ def main(cfg: DictConfig) -> None:
         val_ratio=cfg.dataset.val_split,
     )
 
+    world_size = torch.cuda.device_count()
+    
     # 3. Define your clients
     client_fn = None
     # pylint: disable=protected-access
@@ -61,10 +74,12 @@ def main(cfg: DictConfig) -> None:
             client_cv_dir=client_cv_dir,
         )
     else:
+        # TODO: Replace with rank and world_size
         client_fn = call(
             cfg.client_fn,
             trainloaders,
             valloaders,
+            world_size,
             model=cfg.model,
         )
 
@@ -87,6 +102,8 @@ def main(cfg: DictConfig) -> None:
         )
 
     # 6. Start Simulation
+    print("Waiting 10 seconds in case CUDA memory to be cleared ...")
+    time.sleep(10)
     history = fl.simulation.start_simulation(
         server=server,
         client_fn=client_fn,
@@ -97,6 +114,7 @@ def main(cfg: DictConfig) -> None:
             "num_gpus": cfg.client_resources.num_gpus,
         },
         strategy=strategy,
+        ray_init_args = {"address": "auto"}
     )
 
     print(history)

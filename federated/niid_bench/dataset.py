@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 import torch
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader, random_split
-
+from torch.utils.data.distributed import DistributedSampler
 from niid_bench.dataset_preparation import (
     partition_data,
     partition_data_dirichlet,
@@ -102,6 +102,6 @@ def load_datasets(
         )
         if batch_size == -1:
             batch_size = int(len(ds_train) * batch_size_ratio)
-        trainloaders.append(DataLoader(ds_train, batch_size=batch_size, shuffle=True))
-        valloaders.append(DataLoader(ds_val, batch_size=batch_size))
-    return trainloaders, valloaders, DataLoader(testset, batch_size=len(testset))
+        trainloaders.append(DataLoader(ds_train, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(ds_train)))
+        valloaders.append(DataLoader(ds_val, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(ds_val)))
+    return trainloaders, valloaders, DataLoader(testset, batch_size=len(testset), shuffle=False, sampler=DistributedSampler(testset))
