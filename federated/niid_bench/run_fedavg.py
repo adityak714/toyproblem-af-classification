@@ -213,7 +213,8 @@ def gen_client_fn(
             trainloader,
             valloader,
             device,
-            # rank, world_size, # < world_size (rank variable is dynamically inserted, by mp.spawn called by main.py) 
+            # rank, world_size, # (rank variable is dynamically inserted, 
+                                # by mp.spawn called by main.py) 
             num_epochs,
             learning_rate,
             momentum,
@@ -344,6 +345,7 @@ def load_datasets(
                 sampler=DistributedSampler(ds_train)
             )
         )
+        print(len(ds_train))
         valloaders.append(
             DataLoader(
                 ds_val, 
@@ -360,6 +362,7 @@ def load_datasets(
             pin_memory=True, 
             sampler=DistributedSampler(testset)
         )
+        print(">>>> HOW MANY TRAINING SPLITS", len(trainloaders))
     return trainloaders, valloaders, testloader
 
 def spawner(rank: int, world_size: int, cfg):
@@ -374,6 +377,8 @@ def spawner(rank: int, world_size: int, cfg):
     )
     #############################################################################
     destroy_process_group()
+
+    print(len(trainloaders), len(trainloaders[0]), "batch_size -->>", [len(x) for x, y in trainloaders[0]])
 
     # 2. Define your clients
     client_fn = None
