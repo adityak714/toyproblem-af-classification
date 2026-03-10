@@ -1,17 +1,16 @@
 """Implement the neural network models and training functions."""
-from tqdm.notebook import trange, tqdm
+from tqdm import tqdm
 from typing import List, Tuple
 from sklearn.metrics import average_precision_score
 import numpy as np
 import pandas as pd
-import torch, h5py
+import torch, h5py, glob, time
 import torch.nn as nn
 import torch.nn.functional as F
-from datasets import load_dataset
-from flwr_datasets import FederatedDataset
+from datasets import Dataset
 from torch.nn.parameter import Parameter
 from torch.optim import SGD, Optimizer, Adam
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, Subset, random_split
 from flwr.common import Scalar, Context
 from typing import Callable, Dict, List, OrderedDict, Union, Optional, Tuple
 
@@ -168,29 +167,6 @@ class ResNet1d(nn.Module):
 
 fds = None  # Cache FederatedDataset
 
-"""
-def load_data(partition_id: int, num_partitions: int, batch_size: int):
-    # Load partition CIFAR10 data.
-    # Only initialize `FederatedDataset` once
-    global fds
-    if fds is None:
-        partitioner = IidPartitioner(num_partitions=num_partitions)
-        fds = FederatedDataset(
-            dataset="uoft-cs/cifar10",
-            partitioners={"train": partitioner},
-        )
-    partition = fds.load_partition(partition_id)
-    # Divide data on each node: 80% train, 20% test
-    partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
-    # Construct dataloaders
-    partition_train_test = partition_train_test.with_transform(apply_transforms)
-    trainloader = DataLoader(
-        partition_train_test["train"], batch_size=batch_size, shuffle=True
-    )
-    testloader = DataLoader(partition_train_test["test"], batch_size=batch_size)
-    return trainloader, testloader
-"""
-
 def load_centralized_dataset():
     """Load test set and return dataloader."""
     # Load entire test set
@@ -207,29 +183,21 @@ def load_centralized_dataset():
     return DataLoader(dataset, batch_size=128)
 
 # def load_data(partition_id: int, num_partitions: int, batch_size: int):
-def load_datasets(
-    partition_id: int,
-    num_partitions: int,
-    batch_size: int,
-    partitioning: str = "iid",
-    seed: Optional[int] = 42,
-) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
-
+def load_datasets(partition_id: int, num_partitions: int, batch_size: int, partitioning: str = "iid", seed: Optional[int] = 42) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     trainloaders, testloader = [], []
 
     print("Loading hdf5 ...")
-    datasets = []
-    for i, filepath in enumerate(glob.glob("../data/code15-12l/*.hdf5")[:4]):
-        trains = {
-            "features": [],
-            "labels": []
-        }
+    trains = {
+        "features": [],
+        "labels": []
+    }
+    for i, filepath in enumerate(glob.glob("../../data/code15-12l/*.hdf5")[:1]):
         prefix = filepath.replace("data/code15-12l/", "").replace(".hdf5", "")
-        path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
+        path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
         print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
         # load traces
         f = h5py.File(path_to_h5_train, 'r')
-        traces = np.array(f['tracings'][()], dtype=torch.float32)[:-1,:,:]
+        traces = np.array(f['tracings'][()], dtype=np.float32)[:-1,:,:]
         print("traces successfully converted to tensors ...")
         # load labels
         df = pd.read_csv(path_to_csv_train)
@@ -237,13 +205,17 @@ def load_datasets(
         df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
         labels = np.array(df['AF'], dtype=np.float32).reshape(-1,1)
         
-        print("reindexing of the csv for the given chunk of code15% successful ... now splitting train-test ...")
-        trains["features"] = traces
-        trains["labels"] = labels    
-        datasets.append(pd.DataFrame(trains))
+        if len(trains["features"]) > 0:
+            trains["features"] = np.vstack((trains["features"], traces))
+            trains["labels"] = np.vstack((trains["labels"], labels))
+            print("VSTACK DONE >>", len(trains["features"]), len(trains["labels"]))
+        else:
+            trains["features"] = traces
+            trains["labels"] = labels
 
-    df = pd.concat(datasets)
-    dataset = Dataset.from_pandas(df)
+    trains = TensorDataset(torch.tensor(trains["features"], dtype=torch.float32), torch.tensor(trains["labels"], dtype=torch.float32))
+    trains, testset = random_split(trains, [0.8, 0.2])
+    print("Dataset prepared with_format('torch') >>", trains)
 
     # partition the data
     if partitioning == "dirichlet":
@@ -272,18 +244,73 @@ def load_datasets(
         """
     # both this and below call the same function! only difference is similarity value for non-IID.
     elif partitioning == "iid": 
-        global fds
-        if fds is None:
-            fds = IidPartitioner(num_partitions=num_partitions)
-            fds.dataset = dataset
+        similarity = 1.0
+        trainsets_per_client = []
+        # for s% similarity sample iid data per client
+        s_fraction = int(similarity * len(trains))
+        prng = np.random.default_rng(seed)
+        idxs = prng.choice(len(trains), s_fraction, replace=False)
+        iid_trainset = Subset(trains, idxs) # s*idxs
+        rem_trainset = Subset(trains, np.setdiff1d(np.arange(len(trains)), idxs)) # (1-s)*idxs
+        # s*idxs + (1-s)*idxs = len(trainset)
 
-        partition = fds.load_partition(partition_id)
-        # Divide data on each node: 80% train, 20% test
-        partition_train_test = partition.train_test_split(test_size=0.2, seed=seed)
-        trainloader = DataLoader(
-            partition_train_test["train"], batch_size=batch_size, shuffle=True
-        )
-        testloader = DataLoader(partition_train_test["test"], batch_size=batch_size)
+        # sample iid data per client from iid_trainset
+        all_ids = np.arange(len(iid_trainset))
+        splits = np.array_split(all_ids, num_partitions)
+        for i in range(num_partitions):
+            c_ids = splits[i]
+            d_ids = iid_trainset.indices[c_ids]
+            trainsets_per_client.append(Subset(iid_trainset.dataset, d_ids))
+
+        if similarity == 1.0:
+            return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=2), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+        tmp_t = rem_trainset.dataset.targets
+        if isinstance(tmp_t, list):
+            tmp_t = np.array(tmp_t)
+        if isinstance(tmp_t, torch.Tensor):
+            tmp_t = tmp_t.numpy()
+        targets = tmp_t[rem_trainset.indices]
+        num_remaining_classes = len(set(targets))
+        remaining_classes = list(set(targets))
+        client_classes: List[List] = [[] for _ in range(num_partitions)]
+        times = [0 for _ in range(num_remaining_classes)]
+
+        for i in range(num_partitions):
+            client_classes[i] = [remaining_classes[i % num_remaining_classes]]
+            times[i % num_remaining_classes] += 1
+            j = 1
+            while j < 2:
+                index = prng.choice(num_remaining_classes)
+                class_t = remaining_classes[index]
+                if class_t not in client_classes[i]:
+                    client_classes[i].append(class_t)
+                    times[index] += 1
+                    j += 1
+
+        rem_trainsets_per_client: List[List] = [[] for _ in range(num_partitions)]
+
+        for i in range(num_remaining_classes):
+            class_t = remaining_classes[i]
+            idx_k = np.where(targets == i)[0]
+            prng.shuffle(idx_k)
+            idx_k_split = np.array_split(idx_k, times[i])
+            ids = 0
+            for j in range(num_partitions):
+                if class_t in client_classes[j]:
+                    act_idx = rem_trainset.indices[idx_k_split[ids]]
+                    rem_trainsets_per_client[j].append(
+                        Subset(rem_trainset.dataset, act_idx)
+                    )
+                    ids += 1
+
+        for i in range(num_partitions):
+            trainsets_per_client[i] = ConcatDataset(
+                [trainsets_per_client[i]] + rem_trainsets_per_client[i]
+            )
+
+        return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=2), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+        
     elif partitioning == "iid_noniid":
         """
         similarity = 0.5
@@ -296,6 +323,8 @@ def load_datasets(
             dataset_name=config.name,
         )
         """
+    else:
+        raise NotImplementedError
     return trainloaders, testloader
 
 
@@ -311,11 +340,17 @@ def train_fedavg(
 ) -> None:
     # pylint: disable=too-many-arguments
     """Train the network on the training set using FedAvg."""
+    count = 0
+    for x, y in trainloader:
+        count += 1
+    print(count, epochs, learning_rate)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = Adam(net.parameters(), lr=learning_rate) #,weight_decay=weight_decay)
     #optimizer = SGD(net.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+    loss = 0
     for i in range(epochs):
-        net = _train_one_epoch(net, rank, trainloader, criterion, optimizer, i)
+        loss, net = _train_one_epoch(net, device, trainloader, criterion, optimizer, i)
+    return loss, net
 
 def _train_one_epoch(
     net, #: nn.Module >> changed to DDP for parallellization
@@ -328,13 +363,14 @@ def _train_one_epoch(
     """Train the network on the training set for one epoch."""
     net.to(rank)
     tqdm.write("Training model...")
-    train_pbar = tqdm(trainloader, desc="Training Epoch {epoch:2d}".format(epoch=1), leave=True)
+    train_pbar = tqdm(trainloader, desc="Training Epoch {epoch:2d}".format(epoch=epoch), leave=True)
     total_loss, n_entries = 0, 0
-     
+    
     net.train()
     for traces, diagnoses in train_pbar:
         traces, diagnoses = traces.to(rank), diagnoses.to(rank)
-        for x,y in trainloader:
+        for x, y in trainloader:
+            assert not isinstance(x, str), "FAULTY DATALOADER ... Check your data loading."
             x, y = x.to(rank), y.to(rank)
             pred = net(x)
             curr_loss = criterion(pred, y)
@@ -348,14 +384,10 @@ def _train_one_epoch(
         train_pbar.set_postfix({'loss': total_loss / n_entries})
     train_pbar.close()
 
-    return net
+    return float(total_loss/n_entries), net
 
 # def test(net, testloader, device):
-def test(
-        net, testloader: DataLoader, 
-        device, # == rank >> before: torch.device
-        # world_size=torch.cuda.device_count(): int
-) -> Tuple[float, float]:
+def test(net, testloader: DataLoader, device,) -> Tuple[float, float]: # == rank >> before: torch.device, # world_size=torch.cuda.device_count(): int
     """Evaluate the network on the test set.""" 
     net.to(device)
     net.eval()
@@ -366,6 +398,7 @@ def test(
 
     with torch.no_grad():
         for data, target in testloader:
+            assert not isinstance(data, str), "FAULTY DATALOADER ... Check your data loading."
             data, target = data.to(device), target.to(device)
             output = net(data)
             loss += criterion(output, target).item()
