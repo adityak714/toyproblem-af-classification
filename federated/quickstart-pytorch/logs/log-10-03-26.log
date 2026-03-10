@@ -1,0 +1,407 @@
+INFO :      Starting FedAvg strategy:
+INFO :      	├── Number of rounds: 3
+INFO :      	├── ArrayRecord (11.70 MB)
+INFO :      	├── ConfigRecord (train): {'lr': 0.0001}
+INFO :      	├── ConfigRecord (evaluate): (empty!)
+INFO :      	├──> Sampling:
+INFO :      	│	├──Fraction: train (1.00) | evaluate ( 0.50)
+INFO :      	│	├──Minimum nodes: train (2) | evaluate (2)
+INFO :      	│	└──Minimum available nodes: 2
+INFO :      	└──> Keys in records:
+INFO :      		├── Weighted by: 'num-examples'
+INFO :      		├── ArrayRecord key: 'arrays'
+INFO :      		└── ConfigRecord key: 'config'
+INFO :      
+path_to_h5_train: ../../data/code15-12l/exams_part3.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+/cephyr/users/adityaa/Alvis/flecg/lib/python3.12/site-packages/ray/_private/worker.py:2052: FutureWarning: Tip: In future versions of Ray, Ray will no longer override accelerator visible devices env var if num_gpus=0 or num_gpus=None (default). To enable this behavior and turn off this error message, set RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0
+  warnings.warn(
+INFO :      Initial global evaluation results: {'avg_prec': 0.05720996406790083, 'loss': 0.7008513667780882}
+INFO :      
+INFO :      [ROUND 1/3]
+INFO :      configure_train: Sampled 2 nodes (out of 2)
+(ClientAppActor pid=62435) Loading hdf5 ...
+(ClientAppActor pid=62435) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62434) Loading hdf5 ...
+(ClientAppActor pid=62434) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62435) traces successfully converted to tensors ...
+(ClientAppActor pid=62435) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x148258e20aa0>
+(ClientAppActor pid=62435) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62435) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62435)   self.pid = os.fork()
+(ClientAppActor pid=62435) 63 1 0.0001
+(ClientAppActor pid=62435) Training model...
+Training Epoch  0:   0%|          | 0/63 [00:00<?, ?it/s]
+(ClientAppActor pid=62435) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62435) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62435)   self.pid = os.fork()
+(ClientAppActor pid=62434) traces successfully converted to tensors ...
+(ClientAppActor pid=62434) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x1450e2663530>
+(ClientAppActor pid=62434) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62434) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62434)   self.pid = os.fork()
+(ClientAppActor pid=62434) 63 1 0.0001
+Training Epoch  0:   0%|          | 0/63 [00:00<?, ?it/s]/apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62434) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62434)   self.pid = os.fork()
+Training Epoch  0:   0%|          | 0/63 [00:07<?, ?it/s, loss=0.00Training Epoch  0:   2%|▏         | 1/63 [00:07<07:30,  7.27s/it, loss=0.000617]
+Training Epoch  0:   2%|▏         | 1/63 [00:13<07:30,  7.27s/it, lTraining Epoch  0:   3%|▎         | 2/63 [00:13<06:37,  6.52s/it, loss=0.000609]
+Training Epoch  0:   0%|          | 0/63 [00:06<?, ?it/s, loss=0.00Training Epoch  0:   2%|▏         | 1/63 [00:06<07:10,  6.95s/it, loss=0.0015]
+Training Epoch  0:   3%|▎         | 2/63 [00:19<06:37,  6.52s/it, lTraining Epoch  0:   5%|▍         | 3/63 [00:19<06:16,  6.28s/it, loss=0.000613] [repeated 2x across cluster] (Ray deduplicates logs by default. Set RAY_DEDUP_LOGS=0 to disable log deduplication, or see https://docs.ray.io/en/master/ray-observability/user-guides/configure-logging.html#log-deduplication for more options.)
+Training Epoch  0:   5%|▍         | 3/63 [00:25<06:16,  6.28s/it, lTraining Epoch  0:   6%|▋         | 4/63 [00:25<06:04,  6.17s/it, loss=0.00052] [repeated 2x across cluster]
+Training Epoch  0:   6%|▋         | 4/63 [00:31<06:04,  6.17s/it, lTraining Epoch  0:   8%|▊         | 5/63 [00:31<05:55,  6.13s/it, loss=0.000482] [repeated 2x across cluster]
+Training Epoch  0:   8%|▊         | 5/63 [00:37<05:55,  6.13s/it, lTraining Epoch  0:  10%|▉         | 6/63 [00:37<05:47,  6.10s/it, loss=0.000424] [repeated 2x across cluster]
+Training Epoch  0:  11%|█         | 7/63 [00:43<05:39,  6.06s/it, loss=0.00048] [repeated 2x across cluster]
+Training Epoch  0:  11%|█         | 7/63 [00:49<05:39,  6.06s/it, lossTraining Epoch  0:  13%|█▎        | 8/63 [00:49<05:32,  6.05s/it, loss=0.000509] [repeated 2x across cluster]
+Training Epoch  0:  13%|█▎        | 8/63 [00:55<05:32,  6.05s/it, lossTraining Epoch  0:  14%|█▍        | 9/63 [00:55<05:26,  6.04s/it, loss=0.000499] [repeated 2x across cluster]
+Training Epoch  0:  14%|█▍        | 9/63 [01:01<05:26,  6.04s/it, lossTraining Epoch  0:  16%|█▌        | 10/63 [01:01<05:19,  6.04s/it, loss=0.000457] [repeated 2x across cluster]
+Training Epoch  0:  16%|█▌        | 10/63 [01:07<05:19,  6.04s/it, losTraining Epoch  0:  17%|█▋        | 11/63 [01:07<05:13,  6.03s/it, loss=0.000499] [repeated 2x across cluster]
+Training Epoch  0:  17%|█▋        | 11/63 [01:13<05:13,  6.03s/it, losTraining Epoch  0:  19%|█▉        | 12/63 [01:13<05:07,  6.02s/it, loss=0.000505] [repeated 2x across cluster]
+Training Epoch  0:  19%|█▉        | 12/63 [01:19<05:07,  6.02s/it, losTraining Epoch  0:  21%|██        | 13/63 [01:19<05:01,  6.02s/it, loss=0.000474] [repeated 2x across cluster]
+Training Epoch  0:  21%|██        | 13/63 [01:25<05:01,  6.02s/it, losTraining Epoch  0:  22%|██▏       | 14/63 [01:25<04:54,  6.02s/it, loss=0.000459] [repeated 2x across cluster]
+Training Epoch  0:  22%|██▏       | 14/63 [01:31<04:54,  6.02s/it, losTraining Epoch  0:  24%|██▍       | 15/63 [01:31<04:49,  6.03s/it, loss=0.000485] [repeated 2x across cluster]
+Training Epoch  0:  24%|██▍       | 15/63 [01:37<04:49,  6.03s/it, Training Epoch  0:  25%|██▌       | 16/63 [01:37<04:43,  6.03s/it, loss=0.000485] [repeated 2x across cluster]
+Training Epoch  0:  25%|██▌       | 16/63 [01:43<04:43,  6.03s/it,Training Epoch  0:  27%|██▋       | 17/63 [01:43<04:37,  6.03s/it, loss=0.000464] [repeated 2x across cluster]
+Training Epoch  0:  27%|██▋       | 17/63 [01:49<04:37,  6.03s/it,Training Epoch  0:  29%|██▊       | 18/63 [01:49<04:31,  6.04s/it, loss=0.000448] [repeated 2x across cluster]
+Training Epoch  0:  29%|██▊       | 18/63 [01:55<04:31,  6.04s/it,Training Epoch  0:  30%|███       | 19/63 [01:55<04:25,  6.03s/it, loss=0.00045] [repeated 2x across cluster]
+Training Epoch  0:  30%|███       | 19/63 [02:01<04:25,  6.03s/it,Training Epoch  0:  32%|███▏      | 20/63 [02:01<04:19,  6.03s/it, loss=0.000449] [repeated 2x across cluster]
+Training Epoch  0:  30%|███       | 19/63 [02:02<04:27,  6.07s/it,Training Epoch  0:  32%|███▏      | 20/63 [02:02<04:21,  6.08s/it, loss=0.00071]
+Training Epoch  0:  32%|███▏      | 20/63 [02:07<04:19,  6.03s/it,Training Epoch  0:  33%|███▎      | 21/63 [02:07<04:13,  6.03s/it, loss=0.000435]
+Training Epoch  0:  33%|███▎      | 21/63 [02:13<04:13,  6.03s/it,Training Epoch  0:  35%|███▍      | 22/63 [02:13<04:07,  6.03s/it, loss=0.000424] [repeated 2x across cluster]
+Training Epoch  0:  33%|███▎      | 21/63 [02:14<04:15,  6.07s/it,Training Epoch  0:  35%|███▍      | 22/63 [02:14<04:09,  6.07s/it, loss=0.000656]
+Training Epoch  0:  35%|███▍      | 22/63 [02:19<04:07,  6.03s/it,Training Epoch  0:  37%|███▋      | 23/63 [02:19<04:01,  6.03s/it, loss=0.000446]
+Training Epoch  0:  35%|███▍      | 22/63 [02:20<04:09,  6.07s/it,Training Epoch  0:  37%|███▋      | 23/63 [02:20<04:03,  6.08s/it, loss=0.000634]
+Training Epoch  0:  37%|███▋      | 23/63 [02:25<04:01,  6.03s/it,Training Epoch  0:  38%|███▊      | 24/63 [02:25<03:55,  6.05s/it, loss=0.000444]
+Training Epoch  0:  37%|███▋      | 23/63 [02:26<04:03,  6.08s/it,Training Epoch  0:  38%|███▊      | 24/63 [02:26<03:57,  6.09s/it, loss=0.000616]
+Training Epoch  0:  38%|███▊      | 24/63 [02:31<03:55,  6.05s/it,Training Epoch  0:  40%|███▉      | 25/63 [02:31<03:49,  6.04s/it, loss=0.000448]
+Training Epoch  0:  38%|███▊      | 24/63 [02:32<03:57,  6.09s/it,Training Epoch  0:  40%|███▉      | 25/63 [02:32<03:51,  6.09s/it, loss=0.000593]
+Training Epoch  0:  40%|███▉      | 25/63 [02:37<03:49,  6.04s/it,Training Epoch  0:  41%|████▏     | 26/63 [02:37<03:43,  6.05s/it, loss=0.000436]
+Training Epoch  0:  40%|███▉      | 25/63 [02:38<03:51,  6.09s/it,Training Epoch  0:  41%|████▏     | 26/63 [02:38<03:45,  6.09s/it, loss=0.000583]
+Training Epoch  0:  41%|████▏     | 26/63 [02:43<03:43,  6.05s/it,Training Epoch  0:  43%|████▎     | 27/63 [02:43<03:37,  6.05s/it, loss=0.000422]
+Training Epoch  0:  41%|████▏     | 26/63 [02:44<03:45,  6.09s/it,Training Epoch  0:  43%|████▎     | 27/63 [02:44<03:39,  6.10s/it, loss=0.000569]
+Training Epoch  0:  43%|████▎     | 27/63 [02:50<03:37,  6.05s/it,Training Epoch  0:  44%|████▍     | 28/63 [02:50<03:31,  6.06s/it, loss=0.000409]
+Training Epoch  0:  43%|████▎     | 27/63 [02:51<03:39,  6.10s/it,Training Epoch  0:  44%|████▍     | 28/63 [02:51<03:34,  6.13s/it, loss=0.000556]
+Training Epoch  0:  44%|████▍     | 28/63 [02:56<03:31,  6.06s/it,Training Epoch  0:  46%|████▌     | 29/63 [02:56<03:27,  6.09s/it, loss=0.000398]
+Training Epoch  0:  44%|████▍     | 28/63 [02:57<03:34,  6.13s/it,Training Epoch  0:  46%|████▌     | 29/63 [02:57<03:27,  6.12s/it, loss=0.000545]
+Training Epoch  0:  46%|████▌     | 29/63 [03:02<03:27,  6.09s/it,Training Epoch  0:  48%|████▊     | 30/63 [03:02<03:21,  6.10s/it, loss=0.000388]
+Training Epoch  0:  46%|████▌     | 29/63 [03:03<03:27,  6.12s/it,Training Epoch  0:  48%|████▊     | 30/63 [03:03<03:21,  6.11s/it, loss=0.000532]
+Training Epoch  0:  48%|████▊     | 30/63 [03:08<03:21,  6.10s/it,Training Epoch  0:  49%|████▉     | 31/63 [03:08<03:15,  6.11s/it, loss=0.00038]
+Training Epoch  0:  48%|████▊     | 30/63 [03:09<03:21,  6.11s/it,Training Epoch  0:  49%|████▉     | 31/63 [03:09<03:15,  6.12s/it, loss=0.000517]
+Training Epoch  0:  49%|████▉     | 31/63 [03:14<03:15,  6.11s/it,Training Epoch  0:  51%|█████     | 32/63 [03:14<03:09,  6.12s/it, loss=0.000369]
+Training Epoch  0:  49%|████▉     | 31/63 [03:15<03:15,  6.12s/it,Training Epoch  0:  51%|█████     | 32/63 [03:15<03:09,  6.12s/it, loss=0.000512]
+Training Epoch  0:  51%|█████     | 32/63 [03:20<03:09,  6.12s/it,Training Epoch  0:  52%|█████▏    | 33/63 [03:20<03:03,  6.11s/it, loss=0.00037]
+Training Epoch  0:  51%|█████     | 32/63 [03:21<03:09,  6.12s/it,Training Epoch  0:  52%|█████▏    | 33/63 [03:21<03:03,  6.12s/it, loss=0.000499]
+Training Epoch  0:  52%|█████▏    | 33/63 [03:26<03:03,  6.11s/it,Training Epoch  0:  54%|█████▍    | 34/63 [03:26<02:56,  6.09s/it, loss=0.00036]
+Training Epoch  0:  52%|█████▏    | 33/63 [03:27<03:03,  6.12s/it,Training Epoch  0:  54%|█████▍    | 34/63 [03:27<02:57,  6.12s/it, loss=0.000486]
+Training Epoch  0:  54%|█████▍    | 34/63 [03:32<02:56,  6.09s/it,Training Epoch  0:  56%|█████▌    | 35/63 [03:32<02:50,  6.08s/it, loss=0.000351]
+Training Epoch  0:  54%|█████▍    | 34/63 [03:33<02:57,  6.12s/it,Training Epoch  0:  56%|█████▌    | 35/63 [03:33<02:51,  6.12s/it, loss=0.000472]
+Training Epoch  0:  56%|█████▌    | 35/63 [03:38<02:50,  6.08s/it,Training Epoch  0:  57%|█████▋    | 36/63 [03:38<02:44,  6.08s/it, loss=0.000343]
+Training Epoch  0:  56%|█████▌    | 35/63 [03:40<02:51,  6.12s/it,Training Epoch  0:  57%|█████▋    | 36/63 [03:40<02:44,  6.10s/it, loss=0.000461]
+Training Epoch  0:  57%|█████▋    | 36/63 [03:44<02:44,  6.08s/it,Training Epoch  0:  59%|█████▊    | 37/63 [03:44<02:38,  6.08s/it, loss=0.000334]
+Training Epoch  0:  57%|█████▋    | 36/63 [03:46<02:44,  6.10s/it,Training Epoch  0:  59%|█████▊    | 37/63 [03:46<02:38,  6.11s/it, loss=0.000449]
+Training Epoch  0:  59%|█████▊    | 37/63 [03:51<02:38,  6.08s/it,Training Epoch  0:  60%|██████    | 38/63 [03:51<02:31,  6.08s/it, loss=0.000327]
+Training Epoch  0:  59%|█████▊    | 37/63 [03:52<02:38,  6.11s/it,Training Epoch  0:  60%|██████    | 38/63 [03:52<02:32,  6.11s/it, loss=0.000438]
+Training Epoch  0:  60%|██████    | 38/63 [03:57<02:31,  6.08s/it,Training Epoch  0:  62%|██████▏   | 39/63 [03:57<02:26,  6.09s/it, loss=0.000319]
+Training Epoch  0:  60%|██████    | 38/63 [03:58<02:32,  6.11s/it,Training Epoch  0:  62%|██████▏   | 39/63 [03:58<02:27,  6.14s/it, loss=0.000427]
+Training Epoch  0:  62%|██████▏   | 39/63 [04:03<02:26,  6.09s/it,Training Epoch  0:  63%|██████▎   | 40/63 [04:03<02:20,  6.09s/it, loss=0.000311]
+Training Epoch  0:  62%|██████▏   | 39/63 [04:04<02:27,  6.14s/it,Training Epoch  0:  63%|██████▎   | 40/63 [04:04<02:20,  6.13s/it, loss=0.000417]
+Training Epoch  0:  63%|██████▎   | 40/63 [04:09<02:20,  6.09s/it,Training Epoch  0:  65%|██████▌   | 41/63 [04:09<02:13,  6.08s/it, loss=0.000304]
+Training Epoch  0:  63%|██████▎   | 40/63 [04:10<02:20,  6.13s/it,Training Epoch  0:  65%|██████▌   | 41/63 [04:10<02:14,  6.12s/it, loss=0.000407]
+Training Epoch  0:  65%|██████▌   | 41/63 [04:15<02:13,  6.08s/it,Training Epoch  0:  67%|██████▋   | 42/63 [04:15<02:07,  6.08s/it, loss=0.000297]
+Training Epoch  0:  65%|██████▌   | 41/63 [04:16<02:14,  6.12s/it,Training Epoch  0:  67%|██████▋   | 42/63 [04:16<02:08,  6.12s/it, loss=0.000398]
+Training Epoch  0:  67%|██████▋   | 42/63 [04:21<02:07,  6.08s/it,Training Epoch  0:  68%|██████▊   | 43/63 [04:21<02:01,  6.08s/it, loss=0.000294]
+Training Epoch  0:  67%|██████▋   | 42/63 [04:22<02:08,  6.12s/it,Training Epoch  0:  68%|██████▊   | 43/63 [04:22<02:02,  6.11s/it, loss=0.00039]
+Training Epoch  0:  68%|██████▊   | 43/63 [04:27<02:01,  6.08s/it,Training Epoch  0:  70%|██████▉   | 44/63 [04:27<01:55,  6.07s/it, loss=0.000288]
+Training Epoch  0:  68%|██████▊   | 43/63 [04:28<02:02,  6.11s/it,Training Epoch  0:  70%|██████▉   | 44/63 [04:28<01:55,  6.09s/it, loss=0.000384]
+Training Epoch  0:  70%|██████▉   | 44/63 [04:33<01:55,  6.07s/it,Training Epoch  0:  71%|███████▏  | 45/63 [04:33<01:49,  6.07s/it, loss=0.000282]
+Training Epoch  0:  70%|██████▉   | 44/63 [04:35<01:55,  6.09s/it,Training Epoch  0:  71%|███████▏  | 45/63 [04:35<01:50,  6.11s/it, loss=0.000376]
+Training Epoch  0:  71%|███████▏  | 45/63 [04:39<01:49,  6.07s/it,Training Epoch  0:  73%|███████▎  | 46/63 [04:39<01:43,  6.06s/it, loss=0.000276]
+Training Epoch  0:  71%|███████▏  | 45/63 [04:41<01:50,  6.11s/it,Training Epoch  0:  73%|███████▎  | 46/63 [04:41<01:44,  6.12s/it, loss=0.000368]
+Training Epoch  0:  73%|███████▎  | 46/63 [04:45<01:43,  6.06s/it,Training Epoch  0:  75%|███████▍  | 47/63 [04:45<01:37,  6.09s/it, loss=0.000271]
+Training Epoch  0:  73%|███████▎  | 46/63 [04:47<01:44,  6.12s/it,Training Epoch  0:  75%|███████▍  | 47/63 [04:47<01:38,  6.14s/it, loss=0.00036]
+Training Epoch  0:  75%|███████▍  | 47/63 [04:51<01:37,  6.09s/it,Training Epoch  0:  76%|███████▌  | 48/63 [04:51<01:31,  6.08s/it, loss=0.000265]
+Training Epoch  0:  76%|███████▌  | 48/63 [04:53<01:31,  6.12s/it, loss=0.000353]
+Training Epoch  0:  78%|███████▊  | 49/63 [04:57<01:24,  6.07s/it, loss=0.00026] 
+Training Epoch  0:  78%|███████▊  | 49/63 [04:59<01:25,  6.11s/it, loss=0.000347]
+Training Epoch  0:  79%|███████▉  | 50/63 [05:03<01:18,  6.05s/it, loss=0.000255]
+Training Epoch  0:  81%|████████  | 51/63 [05:09<01:12,  6.04s/it, loss=0.00025] 
+Training Epoch  0:  79%|███████▉  | 50/63 [05:05<01:19,  6.13s/it, loss=0.00034] 
+Training Epoch  0:  83%|████████▎ | 52/63 [05:15<01:06,  6.04s/it, loss=0.000246]
+Training Epoch  0:  81%|████████  | 51/63 [05:11<01:13,  6.12s/it, loss=0.000334]
+Training Epoch  0:  84%|████████▍ | 53/63 [05:22<01:00,  6.04s/it, loss=0.000241]
+Training Epoch  0:  83%|████████▎ | 52/63 [05:17<01:07,  6.13s/it, loss=0.000328]
+Training Epoch  0:  86%|████████▌ | 54/63 [05:28<00:54,  6.06s/it, loss=0.000237]
+Training Epoch  0:  84%|████████▍ | 53/63 [05:24<01:01,  6.12s/it, loss=0.000321]
+Training Epoch  0:  87%|████████▋ | 55/63 [05:34<00:48,  6.06s/it, loss=0.000233]
+Training Epoch  0:  86%|████████▌ | 54/63 [05:30<00:55,  6.11s/it, loss=0.000316]
+Training Epoch  0:  89%|████████▉ | 56/63 [05:40<00:42,  6.06s/it, loss=0.000228]
+Training Epoch  0:  87%|████████▋ | 55/63 [05:36<00:49,  6.13s/it, loss=0.00031] 
+Training Epoch  0:  90%|█████████ | 57/63 [05:46<00:36,  6.05s/it, loss=0.000225]
+Training Epoch  0:  89%|████████▉ | 56/63 [05:42<00:43,  6.14s/it, loss=0.000305]
+Training Epoch  0:  92%|█████████▏| 58/63 [05:52<00:30,  6.08s/it, loss=0.000221]
+Training Epoch  0:  90%|█████████ | 57/63 [05:48<00:36,  6.14s/it, loss=0.0003]  
+Training Epoch  0:  94%|█████████▎| 59/63 [05:58<00:24,  6.08s/it, loss=0.000217]
+Training Epoch  0:  92%|█████████▏| 58/63 [05:54<00:30,  6.11s/it, loss=0.000295]
+Training Epoch  0:  95%|█████████▌| 60/63 [06:04<00:18,  6.09s/it, loss=0.000214]
+Training Epoch  0:  94%|█████████▎| 59/63 [06:00<00:24,  6.10s/it, loss=0.00029] 
+Training Epoch  0:  97%|█████████▋| 61/63 [06:10<00:12,  6.08s/it, loss=0.00021] 
+Training Epoch  0:  95%|█████████▌| 60/63 [06:06<00:18,  6.12s/it, loss=0.000285]
+Training Epoch  0:  98%|█████████▊| 62/63 [06:16<00:06,  6.07s/it, loss=0.000207]
+Training Epoch  0:  97%|█████████▋| 61/63 [06:13<00:12,  6.11s/it, loss=0.000281]
+Training Epoch  0: 100%|██████████| 63/63 [06:22<00:00,  6.08s/it, loss=0.000205]
+Training Epoch  0: 100%|██████████| 63/63 [06:22<00:00,  6.08s/it, loss=0.000205]
+Training Epoch  0:  98%|█████████▊| 62/63 [06:19<00:06,  6.11s/it, loss=0.000276]
+Training Epoch  0: 100%|██████████| 63/63 [06:25<00:00,  6.10s/it, loss=0.000274]
+Training Epoch  0: 100%|██████████| 63/63 [06:25<00:00,  6.12s/it, loss=0.000274]
+INFO :      aggregate_train: Received 2 results and 0 failures
+INFO :      	└──> Aggregated MetricRecord: {'train_loss': 0.00023971675834764028}
+INFO :      configure_evaluate: Sampled 2 nodes (out of 2)
+(ClientAppActor pid=62434) Loading hdf5 ...
+(ClientAppActor pid=62434) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62434) Training model...
+(ClientAppActor pid=62435) traces successfully converted to tensors ...
+(ClientAppActor pid=62435) Loading hdf5 ...
+(ClientAppActor pid=62435) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62435) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x1481e7b4baa0>
+(ClientAppActor pid=62435) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62435) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62435)   self.pid = os.fork()
+INFO :      aggregate_evaluate: Received 2 results and 0 failures
+INFO :      	└──> Aggregated MetricRecord: {'eval_loss': 0.06968836303894932, 'eval_acc': 0.6098175563105788}
+INFO :      Global evaluation
+path_to_h5_train: ../../data/code15-12l/exams_part3.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+INFO :      	└──> MetricRecord: {'avg_prec': 0.2596695609893254, 'loss': 0.14337027972196317}
+INFO :      
+INFO :      [ROUND 2/3]
+INFO :      configure_train: Sampled 2 nodes (out of 2)
+(ClientAppActor pid=62434) Loading hdf5 ...
+(ClientAppActor pid=62434) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62434) traces successfully converted to tensors ...
+(ClientAppActor pid=62434) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x1450e22a9010>
+(ClientAppActor pid=62435) traces successfully converted to tensors ...
+(ClientAppActor pid=62435) Loading hdf5 ...
+(ClientAppActor pid=62435) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62435) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x148218a09340>
+(ClientAppActor pid=62435) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62435) is multi-threaded, use of fork() may lead to deadlocks in the child. [repeated 2x across cluster]
+(ClientAppActor pid=62435)   self.pid = os.fork() [repeated 2x across cluster]
+(ClientAppActor pid=62435) 63 1 0.0001
+(ClientAppActor pid=62435) Training model...
+Training Epoch  0:   0%|          | 0/63 [00:00<?, ?it/s]
+(ClientAppActor pid=62434) 63 1 0.0001
+Training Epoch  0:   2%|▏         | 1/63 [00:06<06:23,  6.18s/it, loss=0.000853]
+(ClientAppActor pid=62434) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62434) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62434)   self.pid = os.fork()
+Training Epoch  0:   0%|          | 0/63 [00:00<?, ?it/s]
+Training Epoch  0:   3%|▎         | 2/63 [00:12<06:12,  6.10s/it, loss=0.000651]
+Training Epoch  0:   2%|▏         | 1/63 [00:06<06:15,  6.05s/it, loss=0.000239]
+Training Epoch  0:   5%|▍         | 3/63 [00:18<06:04,  6.07s/it, loss=0.000484] [repeated 2x across cluster]
+Training Epoch  0:   6%|▋         | 4/63 [00:24<05:57,  6.05s/it, loss=0.000576] [repeated 2x across cluster]
+Training Epoch  0:   8%|▊         | 5/63 [00:30<05:51,  6.05s/it, loss=0.000586] [repeated 2x across cluster]
+Training Epoch  0:  10%|▉         | 6/63 [00:36<05:46,  6.07s/it, loss=0.000496] [repeated 2x across cluster]
+Training Epoch  0:  11%|█         | 7/63 [00:42<05:39,  6.05s/it, loss=0.000442] [repeated 2x across cluster]
+Training Epoch  0:  13%|█▎        | 8/63 [00:48<05:31,  6.02s/it, loss=0.000148] [repeated 2x across cluster]
+Training Epoch  0:  14%|█▍        | 9/63 [00:54<05:25,  6.03s/it, loss=0.000146] [repeated 2x across cluster]
+Training Epoch  0:  16%|█▌        | 10/63 [01:00<05:18,  6.00s/it, loss=0.000135] [repeated 2x across cluster]
+Training Epoch  0:  17%|█▋        | 11/63 [01:06<05:11,  5.99s/it, loss=0.000124] [repeated 2x across cluster]
+Training Epoch  0:  19%|█▉        | 12/63 [01:12<05:04,  5.98s/it, loss=0.00012] [repeated 2x across cluster]
+Training Epoch  0:  21%|██        | 13/63 [01:18<04:59,  6.00s/it, loss=0.000112] [repeated 2x across cluster]
+Training Epoch  0:  22%|██▏       | 14/63 [01:24<04:53,  6.00s/it, loss=0.000108] [repeated 2x across cluster]
+Training Epoch  0:  24%|██▍       | 15/63 [01:30<04:48,  6.00s/it, loss=0.000103] [repeated 2x across cluster]
+Training Epoch  0:  25%|██▌       | 16/63 [01:36<04:42,  6.00s/it, loss=9.77e-5] [repeated 2x across cluster]
+Training Epoch  0:  27%|██▋       | 17/63 [01:42<04:36,  6.01s/it, loss=9.27e-5] [repeated 2x across cluster]
+Training Epoch  0:  29%|██▊       | 18/63 [01:48<04:30,  6.02s/it, loss=8.84e-5] [repeated 2x across cluster]
+Training Epoch  0:  30%|███       | 19/63 [01:54<04:25,  6.02s/it, loss=8.4e-5] [repeated 2x across cluster]
+Training Epoch  0:  32%|███▏      | 20/63 [02:00<04:18,  6.01s/it, loss=8.27e-5] [repeated 2x across cluster]
+Training Epoch  0:  33%|███▎      | 21/63 [02:06<04:12,  6.00s/it, loss=8.31e-5] [repeated 2x across cluster]
+Training Epoch  0:  35%|███▍      | 22/63 [02:12<04:05,  5.99s/it, loss=8.01e-5] [repeated 2x across cluster]
+Training Epoch  0:  37%|███▋      | 23/63 [02:18<03:59,  5.99s/it, loss=7.69e-5] [repeated 2x across cluster]
+Training Epoch  0:  38%|███▊      | 24/63 [02:24<03:53,  5.99s/it, loss=7.41e-5] [repeated 2x across cluster]
+Training Epoch  0:  40%|███▉      | 25/63 [02:30<03:47,  5.98s/it, loss=7.14e-5] [repeated 2x across cluster]
+Training Epoch  0:  41%|████▏     | 26/63 [02:36<03:41,  5.98s/it, loss=6.98e-5] [repeated 2x across cluster]
+Training Epoch  0:  43%|████▎     | 27/63 [02:41<03:34,  5.97s/it, loss=6.77e-5] [repeated 2x across cluster]
+Training Epoch  0:  44%|████▍     | 28/63 [02:47<03:28,  5.97s/it, loss=6.66e-5] [repeated 2x across cluster]
+Training Epoch  0:  46%|████▌     | 29/63 [02:53<03:22,  5.96s/it, loss=6.49e-5] [repeated 2x across cluster]
+Training Epoch  0:  48%|████▊     | 30/63 [02:59<03:16,  5.96s/it, loss=6.29e-5] [repeated 2x across cluster]
+Training Epoch  0:  49%|████▉     | 31/63 [03:05<03:10,  5.95s/it, loss=6.18e-5] [repeated 2x across cluster]
+Training Epoch  0:  51%|█████     | 32/63 [03:11<03:04,  5.94s/it, loss=6.03e-5] [repeated 2x across cluster]
+Training Epoch  0:  52%|█████▏    | 33/63 [03:17<02:58,  5.94s/it, loss=5.89e-5] [repeated 2x across cluster]
+Training Epoch  0:  54%|█████▍    | 34/63 [03:23<02:52,  5.94s/it, loss=6.03e-5] [repeated 2x across cluster]
+Training Epoch  0:  56%|█████▌    | 35/63 [03:29<02:46,  5.94s/it, loss=5.87e-5] [repeated 2x across cluster]
+Training Epoch  0:  57%|█████▋    | 36/63 [03:35<02:40,  5.96s/it, loss=6.19e-5] [repeated 2x across cluster]
+Training Epoch  0:  59%|█████▊    | 37/63 [03:41<02:34,  5.96s/it, loss=6.04e-5] [repeated 2x across cluster]
+Training Epoch  0:  60%|██████    | 38/63 [03:47<02:28,  5.95s/it, loss=5.92e-5] [repeated 2x across cluster]
+Training Epoch  0:  62%|██████▏   | 39/63 [03:53<02:22,  5.96s/it, loss=5.78e-5] [repeated 2x across cluster]
+Training Epoch  0:  63%|██████▎   | 40/63 [03:59<02:16,  5.95s/it, loss=5.66e-5] [repeated 2x across cluster]
+Training Epoch  0:  65%|██████▌   | 41/63 [04:05<02:11,  5.96s/it, loss=5.53e-5] [repeated 2x across cluster]
+Training Epoch  0:  67%|██████▋   | 42/63 [04:11<02:04,  5.95s/it, loss=5.43e-5] [repeated 2x across cluster]
+Training Epoch  0:  68%|██████▊   | 43/63 [04:17<01:58,  5.94s/it, loss=5.35e-5] [repeated 2x across cluster]
+Training Epoch  0:  70%|██████▉   | 44/63 [04:23<01:52,  5.93s/it, loss=5.27e-5] [repeated 2x across cluster]
+Training Epoch  0:  71%|███████▏  | 45/63 [04:29<01:46,  5.94s/it, loss=5.16e-5] [repeated 2x across cluster]
+Training Epoch  0:  73%|███████▎  | 46/63 [04:35<01:41,  5.95s/it, loss=5.16e-5] [repeated 2x across cluster]
+Training Epoch  0:  75%|███████▍  | 47/63 [04:40<01:35,  5.95s/it, loss=5.05e-5] [repeated 2x across cluster]
+Training Epoch  0:  76%|███████▌  | 48/63 [04:46<01:29,  5.95s/it, loss=4.95e-5] [repeated 2x across cluster]
+Training Epoch  0:  78%|███████▊  | 49/63 [04:52<01:23,  5.95s/it, loss=4.86e-5] [repeated 2x across cluster]
+Training Epoch  0:  79%|███████▉  | 50/63 [04:58<01:17,  5.97s/it, loss=5.52e-5] [repeated 2x across cluster]
+Training Epoch  0:  81%|████████  | 51/63 [05:04<01:11,  5.96s/it, loss=5.41e-5] [repeated 2x across cluster]
+Training Epoch  0:  83%|████████▎ | 52/63 [05:10<01:05,  5.97s/it, loss=5.37e-5] [repeated 2x across cluster]
+Training Epoch  0:  84%|████████▍ | 53/63 [05:16<00:59,  5.97s/it, loss=5.28e-5] [repeated 2x across cluster]
+Training Epoch  0:  86%|████████▌ | 54/63 [05:22<00:53,  5.97s/it, loss=5.2e-5] [repeated 2x across cluster]
+Training Epoch  0:  87%|████████▋ | 55/63 [05:28<00:48,  6.00s/it, loss=5.11e-5] [repeated 2x across cluster]
+Training Epoch  0:  89%|████████▉ | 56/63 [05:34<00:41,  6.00s/it, loss=5.02e-5] [repeated 2x across cluster]
+Training Epoch  0:  90%|█████████ | 57/63 [05:40<00:35,  5.99s/it, loss=4.94e-5] [repeated 2x across cluster]
+Training Epoch  0:  92%|█████████▏| 58/63 [05:46<00:29,  5.98s/it, loss=4.86e-5]
+Training Epoch  0:  90%|█████████ | 57/63 [05:44<00:36,  6.06s/it, loss=8.76e-5]
+Training Epoch  0:  94%|█████████▎| 59/63 [05:52<00:23,  5.97s/it, loss=4.78e-5]
+Training Epoch  0:  92%|█████████▏| 58/63 [05:50<00:30,  6.05s/it, loss=8.62e-5]
+Training Epoch  0:  95%|█████████▌| 60/63 [05:58<00:17,  5.96s/it, loss=4.7e-5] [repeated 2x across cluster]
+Training Epoch  0:  97%|█████████▋| 61/63 [06:04<00:11,  5.95s/it, loss=4.66e-5] [repeated 2x across cluster]
+Training Epoch  0:  98%|█████████▊| 62/63 [06:10<00:05,  5.95s/it, loss=4.63e-5] [repeated 2x across cluster]
+Training Epoch  0: 100%|██████████| 63/63 [06:16<00:00,  5.98s/it, loss=4.83e-5]
+Training Epoch  0:  98%|█████████▊| 62/63 [06:14<00:06,  6.04s/it, loss=8.11e-5]
+Training Epoch  0: 100%|██████████| 63/63 [06:20<00:00,  6.05s/it, loss=8.09e-5]
+Training Epoch  0: 100%|██████████| 63/63 [06:20<00:00,  6.05s/it, loss=8.09e-5]
+INFO :      aggregate_train: Received 2 results and 0 failures
+INFO :      	└──> Aggregated MetricRecord: {'train_loss': 6.457183808288391e-05}
+INFO :      configure_evaluate: Sampled 2 nodes (out of 2)
+(ClientAppActor pid=62434) Loading hdf5 ...
+(ClientAppActor pid=62434) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62434) traces successfully converted to tensors ...
+(ClientAppActor pid=62434) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x1450713dd070>
+(ClientAppActor pid=62434) Training model...
+(ClientAppActor pid=62435) traces successfully converted to tensors ...
+(ClientAppActor pid=62435) Loading hdf5 ...
+(ClientAppActor pid=62435) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62435) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x148218a3d0a0>
+(ClientAppActor pid=62435) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62435) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62435)   self.pid = os.fork()
+INFO :      aggregate_evaluate: Received 2 results and 0 failures
+INFO :      	└──> Aggregated MetricRecord: {'eval_loss': 0.03576847500517033, 'eval_acc': 0.8222265531300459}
+INFO :      Global evaluation
+path_to_h5_train: ../../data/code15-12l/exams_part3.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+INFO :      	└──> MetricRecord: {'avg_prec': 0.3433031467704526, 'loss': 0.13005512306884903}
+INFO :      
+INFO :      [ROUND 3/3]
+INFO :      configure_train: Sampled 2 nodes (out of 2)
+(ClientAppActor pid=62434) Loading hdf5 ...
+(ClientAppActor pid=62434) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62434) traces successfully converted to tensors ...
+(ClientAppActor pid=62434) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x145078191ca0>
+(ClientAppActor pid=62435) traces successfully converted to tensors ...
+(ClientAppActor pid=62435) Loading hdf5 ...
+(ClientAppActor pid=62435) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62435) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x1481e7987e00>
+(ClientAppActor pid=62435) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62435) is multi-threaded, use of fork() may lead to deadlocks in the child. [repeated 2x across cluster]
+(ClientAppActor pid=62435)   self.pid = os.fork() [repeated 2x across cluster]
+(ClientAppActor pid=62435) 63 1 0.0001
+(ClientAppActor pid=62435) Training model...
+Training Epoch  0:   0%|          | 0/63 [00:00<?, ?it/s]
+(ClientAppActor pid=62434) 63 1 0.0001
+Training Epoch  0:   2%|▏         | 1/63 [00:06<06:17,  6.10s/it, loss=0.000814]
+(ClientAppActor pid=62434) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62434) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62434)   self.pid = os.fork()
+Training Epoch  0:   0%|          | 0/63 [00:00<?, ?it/s]
+Training Epoch  0:   3%|▎         | 2/63 [00:12<06:09,  6.06s/it, loss=0.000569]
+Training Epoch  0:   2%|▏         | 1/63 [00:06<06:22,  6.17s/it, loss=0.00014]
+Training Epoch  0:   5%|▍         | 3/63 [00:18<06:00,  6.00s/it, loss=0.000414] [repeated 2x across cluster]
+Training Epoch  0:   6%|▋         | 4/63 [00:24<05:54,  6.00s/it, loss=0.000337] [repeated 2x across cluster]
+Training Epoch  0:   8%|▊         | 5/63 [00:30<05:47,  5.99s/it, loss=0.000277] [repeated 2x across cluster]
+Training Epoch  0:  10%|▉         | 6/63 [00:36<05:41,  5.99s/it, loss=0.000266] [repeated 2x across cluster]
+Training Epoch  0:  11%|█         | 7/63 [00:42<05:35,  5.99s/it, loss=0.000238] [repeated 2x across cluster]
+Training Epoch  0:  13%|█▎        | 8/63 [00:47<05:29,  5.98s/it, loss=0.000216] [repeated 2x across cluster]
+Training Epoch  0:  14%|█▍        | 9/63 [00:54<05:23,  5.99s/it, loss=0.000199] [repeated 2x across cluster]
+Training Epoch  0:  16%|█▌        | 10/63 [00:59<05:17,  5.98s/it, loss=0.000183] [repeated 2x across cluster]
+Training Epoch  0:  17%|█▋        | 11/63 [01:05<05:11,  5.98s/it, loss=0.000167] [repeated 2x across cluster]
+Training Epoch  0:  19%|█▉        | 12/63 [01:11<05:04,  5.98s/it, loss=0.000156] [repeated 2x across cluster]
+Training Epoch  0:  21%|██        | 13/63 [01:17<04:58,  5.98s/it, loss=0.000149] [repeated 2x across cluster]
+Training Epoch  0:  22%|██▏       | 14/63 [01:23<04:53,  5.98s/it, loss=0.000139] [repeated 2x across cluster]
+Training Epoch  0:  24%|██▍       | 15/63 [01:29<04:47,  5.99s/it, loss=0.000131] [repeated 2x across cluster]
+Training Epoch  0:  25%|██▌       | 16/63 [01:35<04:41,  5.99s/it, loss=0.000123] [repeated 2x across cluster]
+Training Epoch  0:  27%|██▋       | 17/63 [01:41<04:36,  6.00s/it, loss=0.000117] [repeated 2x across cluster]
+Training Epoch  0:  29%|██▊       | 18/63 [01:47<04:30,  6.00s/it, loss=0.000111] [repeated 2x across cluster]
+Training Epoch  0:  30%|███       | 19/63 [01:53<04:23,  5.99s/it, loss=0.000105] [repeated 2x across cluster]
+Training Epoch  0:  32%|███▏      | 20/63 [01:59<04:17,  5.99s/it, loss=0.0001] [repeated 2x across cluster]
+Training Epoch  0:  33%|███▎      | 21/63 [02:05<04:11,  6.00s/it, loss=9.77e-5] [repeated 2x across cluster]
+Training Epoch  0:  35%|███▍      | 22/63 [02:11<04:05,  5.99s/it, loss=9.37e-5] [repeated 2x across cluster]
+Training Epoch  0:  37%|███▋      | 23/63 [02:17<04:00,  6.01s/it, loss=9.03e-5] [repeated 2x across cluster]
+Training Epoch  0:  38%|███▊      | 24/63 [02:23<03:53,  6.00s/it, loss=8.67e-5] [repeated 2x across cluster]
+Training Epoch  0:  40%|███▉      | 25/63 [02:29<03:47,  5.98s/it, loss=8.32e-5] [repeated 2x across cluster]
+Training Epoch  0:  41%|████▏     | 26/63 [02:35<03:41,  5.98s/it, loss=8.01e-5] [repeated 2x across cluster]
+Training Epoch  0:  43%|████▎     | 27/63 [02:41<03:35,  5.98s/it, loss=7.72e-5] [repeated 2x across cluster]
+Training Epoch  0:  44%|████▍     | 28/63 [02:47<03:29,  5.98s/it, loss=7.46e-5] [repeated 2x across cluster]
+Training Epoch  0:  46%|████▌     | 29/63 [02:53<03:23,  5.97s/it, loss=7.21e-5] [repeated 2x across cluster]
+Training Epoch  0:  48%|████▊     | 30/63 [02:59<03:17,  5.98s/it, loss=6.97e-5] [repeated 2x across cluster]
+Training Epoch  0:  49%|████▉     | 31/63 [03:05<03:11,  5.98s/it, loss=6.75e-5] [repeated 2x across cluster]
+Training Epoch  0:  51%|█████     | 32/63 [03:11<03:05,  5.99s/it, loss=6.55e-5] [repeated 2x across cluster]
+Training Epoch  0:  52%|█████▏    | 33/63 [03:17<02:59,  5.99s/it, loss=6.36e-5] [repeated 2x across cluster]
+Training Epoch  0:  54%|█████▍    | 34/63 [03:23<02:53,  5.99s/it, loss=6.18e-5] [repeated 2x across cluster]
+Training Epoch  0:  56%|█████▌    | 35/63 [03:29<02:47,  5.99s/it, loss=6.18e-5] [repeated 2x across cluster]
+Training Epoch  0:  57%|█████▋    | 36/63 [03:35<02:42,  6.00s/it, loss=6.1e-5] [repeated 2x across cluster]
+Training Epoch  0:  59%|█████▊    | 37/63 [03:41<02:35,  5.98s/it, loss=5.95e-5] [repeated 2x across cluster]
+Training Epoch  0:  60%|██████    | 38/63 [03:47<02:29,  5.97s/it, loss=5.97e-5] [repeated 2x across cluster]
+Training Epoch  0:  62%|██████▏   | 39/63 [03:53<02:23,  5.98s/it, loss=5.83e-5] [repeated 2x across cluster]
+Training Epoch  0:  63%|██████▎   | 40/63 [03:59<02:17,  5.97s/it, loss=5.74e-5] [repeated 2x across cluster]
+Training Epoch  0:  65%|██████▌   | 41/63 [04:05<02:11,  5.98s/it, loss=5.64e-5] [repeated 2x across cluster]
+Training Epoch  0:  67%|██████▋   | 42/63 [04:11<02:05,  5.98s/it, loss=5.54e-5] [repeated 2x across cluster]
+Training Epoch  0:  68%|██████▊   | 43/63 [04:17<01:59,  5.98s/it, loss=5.42e-5] [repeated 2x across cluster]
+Training Epoch  0:  70%|██████▉   | 44/63 [04:23<01:53,  5.98s/it, loss=5.3e-5] [repeated 2x across cluster]
+Training Epoch  0:  71%|███████▏  | 45/63 [04:29<01:47,  5.97s/it, loss=5.25e-5] [repeated 2x across cluster]
+Training Epoch  0:  73%|███████▎  | 46/63 [04:35<01:41,  5.97s/it, loss=5.48e-5] [repeated 2x across cluster]
+Training Epoch  0:  75%|███████▍  | 47/63 [04:41<01:35,  5.98s/it, loss=5.38e-5] [repeated 2x across cluster]
+Training Epoch  0:  76%|███████▌  | 48/63 [04:47<01:29,  5.97s/it, loss=5.27e-5] [repeated 2x across cluster]
+Training Epoch  0:  78%|███████▊  | 49/63 [04:53<01:23,  5.98s/it, loss=5.17e-5] [repeated 2x across cluster]
+Training Epoch  0:  79%|███████▉  | 50/63 [04:59<01:17,  5.98s/it, loss=5.06e-5] [repeated 2x across cluster]
+Training Epoch  0:  81%|████████  | 51/63 [05:05<01:11,  5.98s/it, loss=5.09e-5] [repeated 2x across cluster]
+Training Epoch  0:  83%|████████▎ | 52/63 [05:11<01:05,  5.98s/it, loss=5e-5] [repeated 2x across cluster]
+Training Epoch  0:  84%|████████▍ | 53/63 [05:17<00:59,  5.97s/it, loss=4.91e-5] [repeated 2x across cluster]
+Training Epoch  0:  86%|████████▌ | 54/63 [05:23<00:53,  5.96s/it, loss=4.82e-5] [repeated 2x across cluster]
+Training Epoch  0:  87%|████████▋ | 55/63 [05:29<00:47,  5.97s/it, loss=4.73e-5] [repeated 2x across cluster]
+Training Epoch  0:  89%|████████▉ | 56/63 [05:35<00:41,  5.97s/it, loss=4.65e-5] [repeated 2x across cluster]
+Training Epoch  0:  90%|█████████ | 57/63 [05:41<00:35,  5.97s/it, loss=4.57e-5] [repeated 2x across cluster]
+Training Epoch  0:  92%|█████████▏| 58/63 [05:47<00:29,  5.97s/it, loss=4.49e-5]
+Training Epoch  0:  90%|█████████ | 57/63 [05:45<00:36,  6.08s/it, loss=1.99e-5]
+Training Epoch  0:  94%|█████████▎| 59/63 [05:53<00:23,  5.98s/it, loss=4.42e-5]
+Training Epoch  0:  92%|█████████▏| 58/63 [05:51<00:30,  6.07s/it, loss=1.95e-5]
+Training Epoch  0:  95%|█████████▌| 60/63 [05:59<00:17,  6.00s/it, loss=4.35e-5] [repeated 2x across cluster]
+Training Epoch  0:  97%|█████████▋| 61/63 [06:05<00:12,  6.00s/it, loss=4.28e-5] [repeated 2x across cluster]
+Training Epoch  0:  98%|█████████▊| 62/63 [06:11<00:06,  6.00s/it, loss=4.21e-5] [repeated 2x across cluster]
+Training Epoch  0: 100%|██████████| 63/63 [06:17<00:00,  5.99s/it, loss=4.19e-5]
+Training Epoch  0:  98%|█████████▊| 62/63 [06:15<00:06,  6.09s/it, loss=1.83e-5]
+Training Epoch  0: 100%|██████████| 63/63 [06:21<00:00,  6.07s/it, loss=1.82e-5]
+Training Epoch  0: 100%|██████████| 63/63 [06:21<00:00,  6.06s/it, loss=1.82e-5]
+INFO :      aggregate_train: Received 2 results and 0 failures
+INFO :      	└──> Aggregated MetricRecord: {'train_loss': 3.00383115331897e-05}
+INFO :      configure_evaluate: Sampled 2 nodes (out of 2)
+(ClientAppActor pid=62434) Loading hdf5 ...
+(ClientAppActor pid=62434) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62434) traces successfully converted to tensors ...
+(ClientAppActor pid=62434) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x14507100b6e0>
+(ClientAppActor pid=62434) Training model...
+(ClientAppActor pid=62435) traces successfully converted to tensors ...
+(ClientAppActor pid=62435) Loading hdf5 ...
+(ClientAppActor pid=62435) path_to_h5_train: ../../data/code15-12l/exams_part15.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+(ClientAppActor pid=62435) Dataset prepared with_format('torch') >> <torch.utils.data.dataset.Subset object at 0x1481e79121e0>
+(ClientAppActor pid=62435) /apps/Arch/software/Python/3.12.3-GCCcore-13.3.0/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=62435) is multi-threaded, use of fork() may lead to deadlocks in the child.
+(ClientAppActor pid=62435)   self.pid = os.fork()
+INFO :      aggregate_evaluate: Received 2 results and 0 failures
+INFO :      	└──> Aggregated MetricRecord: {'eval_loss': 0.0246313464270429, 'eval_acc': 0.9463859470985947}
+INFO :      Global evaluation
+path_to_h5_train: ../../data/code15-12l/exams_part3.hdf5 path_to_csv ../../data/code15-12l/exams.csv
+INFO :      	└──> MetricRecord: {'avg_prec': 0.43346709949854895, 'loss': 0.15009342266764242}
+INFO :      
+INFO :      Strategy execution finished in 1417.02s
+INFO :      
+INFO :      Final results:
+INFO :      
+INFO :      	Global Arrays:
+INFO :      		ArrayRecord (11.701 MB)
+INFO :      	
+INFO :      	Aggregated ClientApp-side Train Metrics:
+INFO :      	{ 1: {'train_loss': '2.3972e-04'},
+INFO :      	  2: {'train_loss': '6.4572e-05'},
+INFO :      	  3: {'train_loss': '3.0038e-05'}}
+INFO :      	
+INFO :      	Aggregated ClientApp-side Evaluate Metrics:
+INFO :      	{ 1: {'eval_acc': '6.0982e-01', 'eval_loss': '6.9688e-02'},
+INFO :      	  2: {'eval_acc': '8.2223e-01', 'eval_loss': '3.5768e-02'},
+INFO :      	  3: {'eval_acc': '9.4639e-01', 'eval_loss': '2.4631e-02'}}
+INFO :      	
+INFO :      	ServerApp-side Evaluate Metrics:
+INFO :      	{ 0: {'avg_prec': '5.7210e-02', 'loss': '7.0085e-01'},
+INFO :      	  1: {'avg_prec': '2.5967e-01', 'loss': '1.4337e-01'},
+INFO :      	  2: {'avg_prec': '3.4330e-01', 'loss': '1.3006e-01'},
+INFO :      	  3: {'avg_prec': '4.3347e-01', 'loss': '1.5009e-01'}}
+INFO :      
