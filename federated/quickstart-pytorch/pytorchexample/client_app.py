@@ -4,20 +4,19 @@ import torch
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
-from pytorchexample.task import Net, load_data
+from pytorchexample.task import ResNet1d, load_datasets
 from pytorchexample.task import test as test_fn
-from pytorchexample.task import train as train_fn
+from pytorchexample.task import train_fedavg as train_fn
 
 # Flower ClientApp
 app = ClientApp()
-
 
 @app.train()
 def train(msg: Message, context: Context):
     """Train the model on local data."""
 
     # Load the model and initialize it with the received weights
-    model = Net()
+    model = ResNet1d(n_classes=1)
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -26,7 +25,7 @@ def train(msg: Message, context: Context):
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
     batch_size = context.run_config["batch-size"]
-    trainloader, _ = load_data(partition_id, num_partitions, batch_size)
+    trainloader, _ = load_datasets(partition_id, num_partitions, batch_size)
 
     # Call the training function
     train_loss = train_fn(
@@ -46,7 +45,6 @@ def train(msg: Message, context: Context):
     metric_record = MetricRecord(metrics)
     content = RecordDict({"arrays": model_record, "metrics": metric_record})
     return Message(content=content, reply_to=msg)
-
 
 @app.evaluate()
 def evaluate(msg: Message, context: Context):
