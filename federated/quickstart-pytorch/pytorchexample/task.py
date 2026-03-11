@@ -191,7 +191,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         "features": [],
         "labels": []
     }
-    for i, filepath in enumerate(glob.glob("../../data/code15-12l/*.hdf5")[:1]):
+    for i, filepath in enumerate(glob.glob("../../data/code15-12l/*.hdf5")[:5]):
         prefix = filepath.replace("data/code15-12l/", "").replace(".hdf5", "")
         path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
         print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
@@ -214,26 +214,49 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             trains["labels"] = labels
 
     trainset = TensorDataset(torch.tensor(trains["features"], dtype=torch.float32), torch.tensor(trains["labels"], dtype=torch.float32))
-    #testsplit_ratio = 0.2
-    #trainidxs = np.random.choice(np.arange(len(trains)), int(len(trains)*0.2), replace=False)
-    #testidxs = np.setdiff1d(np.arange(len(trains)), trainidxs)
-
     trains, testset = random_split(trainset, [0.8, 0.2])
     print("Dataset prepared with_format('torch') >>", trains)
 
     # partition the data
+    # courtesy: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
-        """
         alpha = 0.5
-        if "alpha" in config:
-            alpha = config.alpha
-        datasets, testset = partition_data_dirichlet(
-            num_clients,
-            alpha=alpha,
-            seed=seed,
-            dataset_name=config.name,
-        )
-        """
+        min_required_samples_per_client = 10
+        min_samples = 0
+        prng = np.random.default_rng(seed)
+
+        # get the targets
+        tmp_t = [y for x,y in trains.dataset] # rem_trainset.dataset.targets
+        if isinstance(tmp_t, list):
+            tmp_t = np.array(tmp_t)
+        if isinstance(tmp_t, torch.Tensor):
+            tmp_t = tmp_t.numpy()
+        targets = tmp_t.flatten()
+        num_classes = len(set(targets))
+        total_samples = len(targets)
+
+        while min_samples < min_required_samples_per_client:
+            idx_clients: List[List] = [[] for _ in range(num_partitions)]
+            for k in range(num_classes):
+                idx_k = np.where(targets == k)[0]
+                prng.shuffle(idx_k)
+                proportions = prng.dirichlet(np.repeat(alpha, num_partitions))
+                proportions = np.array(
+                    [
+                        p * (len(idx_j) < total_samples / num_partitions)
+                        for p, idx_j in zip(proportions, idx_clients)
+                    ]
+                )
+                proportions = proportions / proportions.sum()
+                proportions = (np.cumsum(proportions) * len(idx_k)).astype(int)[:-1]
+                idx_k_split = np.split(idx_k, proportions)
+                idx_clients = [
+                    idx_j + idx.tolist() for idx_j, idx in zip(idx_clients, idx_k_split)
+                ]
+                min_samples = min([len(idx_j) for idx_j in idx_clients])
+
+        trainsets_per_client = [Subset(trainset, idxs) for idxs in idx_clients]
+        return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=4), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
     elif partitioning == "label_quantity":
         """
         labels_per_client = 2
@@ -246,7 +269,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             dataset_name=config.name,
         )
         """
-    # both this and below call the same function! only difference is similarity value for non-IID.
+    # courtesy: https://flower.ai/docs/baselines/niid_bench.html
     elif partitioning == "iid": 
         similarity = 0.6
         trainsets_per_client = []
@@ -268,7 +291,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             trainsets_per_client.append(Subset(iid_trainset.dataset, d_ids))
 
         if similarity == 1.0:
-            return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=2), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+            return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=4), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
 
         tmp_t = [y for x,y in rem_trainset.dataset] # rem_trainset.dataset.targets
         if isinstance(tmp_t, list):
@@ -315,19 +338,6 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             )
 
         return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=4), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
-        
-    elif partitioning == "iid_noniid":
-        """
-        similarity = 0.5
-        if "similarity" in config:
-            similarity = config.similarity
-        datasets, testset = partition_data(
-            num_clients,
-            similarity=similarity,
-            seed=seed,
-            dataset_name=config.name,
-        )
-        """
     else:
         raise NotImplementedError
     return trainloaders, testloader
@@ -358,7 +368,7 @@ def train_fedavg(
     return loss, net
 
 def _train_one_epoch(
-    net, #: nn.Module >> changed to DDP for parallellization
+    net,
     rank, # torch.device
     trainloader: DataLoader,
     criterion: nn.Module,
