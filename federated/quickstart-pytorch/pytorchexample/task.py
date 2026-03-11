@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from datasets import Dataset
 from torch.nn.parameter import Parameter
 from torch.optim import SGD, Optimizer, Adam
-from torch.utils.data import DataLoader, TensorDataset, Subset, random_split
+from torch.utils.data import DataLoader, TensorDataset, Subset, random_split, ConcatDataset
 from flwr.common import Scalar, Context
 from typing import Callable, Dict, List, OrderedDict, Union, Optional, Tuple
 
@@ -213,8 +213,12 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             trains["features"] = traces
             trains["labels"] = labels
 
-    trains = TensorDataset(torch.tensor(trains["features"], dtype=torch.float32), torch.tensor(trains["labels"], dtype=torch.float32))
-    trains, testset = random_split(trains, [0.8, 0.2])
+    trainset = TensorDataset(torch.tensor(trains["features"], dtype=torch.float32), torch.tensor(trains["labels"], dtype=torch.float32))
+    #testsplit_ratio = 0.2
+    #trainidxs = np.random.choice(np.arange(len(trains)), int(len(trains)*0.2), replace=False)
+    #testidxs = np.setdiff1d(np.arange(len(trains)), trainidxs)
+
+    trains, testset = random_split(trainset, [0.8, 0.2])
     print("Dataset prepared with_format('torch') >>", trains)
 
     # partition the data
@@ -244,14 +248,15 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         """
     # both this and below call the same function! only difference is similarity value for non-IID.
     elif partitioning == "iid": 
-        similarity = 1.0
+        similarity = 0.6
         trainsets_per_client = []
         # for s% similarity sample iid data per client
         s_fraction = int(similarity * len(trains))
         prng = np.random.default_rng(seed)
-        idxs = prng.choice(len(trains), s_fraction, replace=False)
-        iid_trainset = Subset(trains, idxs) # s*idxs
-        rem_trainset = Subset(trains, np.setdiff1d(np.arange(len(trains)), idxs)) # (1-s)*idxs
+        iid_idxs = prng.choice(len(trains), s_fraction, replace=False)
+        rem_idxs = np.setdiff1d(np.arange(len(trains)), iid_idxs)
+        iid_trainset = Subset(trains, iid_idxs) # = trainset[iid_idxs] s*idxs
+        rem_trainset = Subset(trains, rem_idxs) # = trainset[rem_idxs] (1-s)*idxs
         # s*idxs + (1-s)*idxs = len(trainset)
 
         # sample iid data per client from iid_trainset
@@ -265,12 +270,12 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         if similarity == 1.0:
             return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=2), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
-        tmp_t = rem_trainset.dataset.targets
+        tmp_t = [y for x,y in rem_trainset.dataset] # rem_trainset.dataset.targets
         if isinstance(tmp_t, list):
             tmp_t = np.array(tmp_t)
         if isinstance(tmp_t, torch.Tensor):
             tmp_t = tmp_t.numpy()
-        targets = tmp_t[rem_trainset.indices]
+        targets = tmp_t[rem_trainset.indices].flatten()
         num_remaining_classes = len(set(targets))
         remaining_classes = list(set(targets))
         client_classes: List[List] = [[] for _ in range(num_partitions)]
@@ -309,7 +314,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
                 [trainsets_per_client[i]] + rem_trainsets_per_client[i]
             )
 
-        return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=2), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+        return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=4), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
         
     elif partitioning == "iid_noniid":
         """
