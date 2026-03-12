@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "quickstart-pytorch"
+name = "flecg-pytorch"
 version = "1.0.1"
 description = "Federated Learning with PyTorch and Flower (Quickstart Example)"
 license = "Apache-2.0"
@@ -29,7 +29,8 @@ num-server-rounds = 3
 fraction-evaluate = 0.5
 local-epochs = 1
 learning-rate = 0.0001
-batch-size = 128
+batch-size = 512
+partitioning = "iid"
 
 
 #######################################################################

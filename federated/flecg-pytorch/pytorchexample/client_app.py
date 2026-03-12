@@ -25,7 +25,7 @@ def train(msg: Message, context: Context):
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
     batch_size = context.run_config["batch-size"]
-    trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size, partitioning="dirichlet")
+    trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size, partitioning=context.run_config["partitioning"])
 
     # Call the training function
     train_loss, new_model = train_fn(
