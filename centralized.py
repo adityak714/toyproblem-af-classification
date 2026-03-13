@@ -411,13 +411,13 @@ def main():
             fig.suptitle("Mean AP and Mean ROCAUC - CODE-15%")
             ax.plot(np.arange(epoch), avgpreclist)
             ax.plot(np.arange(epoch), rocauclist)
-            fig.savefig("centralized-code15-mAP-mROCAUC.png")
+            fig.savefig("mAP-centralized-code15.png")
     
             fig2, ax2 = plt.subplots()
             fig2.suptitle("Train-Validation Loss Curves - CODE-15%")
             ax2.plot(np.arange(epoch), train_loss_all)
             ax2.plot(np.arange(epoch), valid_loss_all)
-            fig2.savefig("centralized-code15-loss-curves.png")
+            fig2.savefig("loss-curves-centralized-code15.png")
 
             PrecisionRecallDisplay.from_predictions(y_trues, y_preds)
             plt.savefig("pr_curve.png")
