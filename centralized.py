@@ -257,14 +257,13 @@ def eval_loop(epoch, chunk, dataloader, model, loss_function, device):
                 if len(np.unique(yt.cpu())) == 2: 
                     # if both positive and negative truth values are present, compute the avg. precision
                     avg_precisions.append(average_precision_score(yt.cpu(), sigmoid(pred).cpu()))
+                    roc_aucs.append(roc_auc_score(yt.cpu(), sigmoid(pred).cpu().argmax(1)))
                     if len(y_trues) > 0 and len(y_preds) > 0:
                         y_trues = torch.cat((y_trues, torch.flatten(yt.cpu())))
                         y_preds = torch.cat((y_preds, torch.flatten(sigmoid(pred).cpu().argmax(1))))
                     else:
                         y_trues = torch.flatten(yt.cpu())
                         y_preds = torch.flatten(sigmoid(pred).cpu().argmax(1))
-
-                    roc_aucs.append(roc_auc_score(yt.cpu(), sigmoid(pred).cpu().argmax(1)))
                 
             # Update accumulated values
             total_loss += curr_loss.detach().cpu().numpy()
@@ -294,8 +293,8 @@ def main():
     
     learning_rate = 1e-4
     weight_decay = 1e-1
-    num_epochs = 2 # 10
-    pos_weight = torch.tensor([48], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
+    num_epochs = 3 # 10
+    pos_weight = torch.tensor([49], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
     
     # =============== Define loss function ====================================#
     loss_function = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -305,7 +304,7 @@ def main():
     optimizer = torch.optim.Adam(
         model.parameters(), 
         lr=learning_rate, 
-        #weight_decay=weight_decay
+        weight_decay=weight_decay
     )
     tqdm.write("Done!\n")
     
@@ -322,31 +321,28 @@ def main():
     tloaders = []
     vloaders = []
     
-    for i, filepath in enumerate(glob.glob("data/code15-12l/*.hdf5")[:2]):
-        prefix = filepath.replace("data/code15-12l/", "").replace(".hdf5", "")
+    for i, filepath in enumerate(glob.glob("data/code15-12l/*.hdf5")[:10]):
         path_to_h5_train, path_to_csv_train = filepath, 'data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
         
         # load traces
         f = h5py.File(path_to_h5_train, 'r')
-        traces = torch.tensor(f['tracings'][()], dtype=torch.float32)[:-1,:,:]
+        traces = torch.tensor(np.array(f['tracings'], dtype=np.float32), dtype=torch.float32)[:-1,:,:]
         
         # load labels
         ids_traces = np.array(f['exam_id'])
         df = pd.read_csv(path_to_csv_train)
+        f.close()
         df.set_index('exam_id', inplace=True)
         df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
         labels = torch.tensor(np.array(df['AF'], dtype=np.float16), dtype=torch.float16, device=gpu_id).reshape(-1,1)
         print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1]))
         print(">> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1]))
-        print(traces.size(), labels.size())
-        print("at", i, " >> 50%")
-        
         # load dataset
         dataset = TensorDataset(traces, labels)
         len_dataset = len(dataset)
         n_classes = len(torch.unique(labels))
+        del traces, labels
     
-        print("at", i, " >> 75%")
         # split data
         dataset_train, dataset_valid = random_split(dataset, lengths=[0.7,0.3])
         
@@ -376,7 +372,7 @@ def main():
             # collect classifications and truth labels
             if len(y_trues) > 0 and gpu_id == 0:
                 y_trues = torch.cat((y_trues, yt))
-                y_preds = torch.cat((y_preds, y_preds))
+                y_preds = torch.cat((y_preds, ypred))
             else:
                 y_trues = yt
                 y_preds = ypred
@@ -409,7 +405,23 @@ def main():
         # save checkpoints between epochs
         if gpu_id == 0:
             _save_snap(model, epoch)
+
+            # =============== PLOTTING  =============================================#
+            fig, ax = plt.subplots()
+            fig.suptitle("Mean AP and Mean ROCAUC - CODE-15%")
+            ax.plot(np.arange(epoch), avgpreclist)
+            ax.plot(np.arange(epoch), rocauclist)
+            fig.savefig("centralized-code15-mAP-mROCAUC.png")
     
+            fig2, ax2 = plt.subplots()
+            fig2.suptitle("Train-Validation Loss Curves - CODE-15%")
+            ax2.plot(np.arange(epoch), train_loss_all)
+            ax2.plot(np.arange(epoch), valid_loss_all)
+            fig2.savefig("centralized-code15-loss-curves.png")
+
+            PrecisionRecallDisplay.from_predictions(y_trues, y_preds)
+            plt.savefig("pr_curve.png")
+
         # Print message
         tqdm.write('Epoch {epoch:2d}: \t'
                     'Train Loss {train_loss:.6f} \t'
@@ -421,21 +433,9 @@ def main():
                             model_save=model_save_state))
     destroy_process_group()
     
-    # =============== PLOTTING  =============================================#
-    fig, ax = plt.subplots()
-    ax.plot(np.arange(num_epochs), avgpreclist)
-    ax.plot(np.arange(num_epochs), rocauclist)
-    fig.savefig("centralized-code15-mAP-mROCAUC.png")
-    
-    fig2, ax2 = plt.subplots()
-    fig.suptitle("Loss Curves")
-    ax2.plot(np.arange(num_epochs), train_loss_all)
-    ax2.plot(np.arange(num_epochs), valid_loss_all)
-    fig2.savefig("centralized-code15-loss-curves.png")
-
-    print(y_trues)
-    time.sleep(5)
-    print(y_preds)
+    #print(y_trues)
+    #time.sleep(5)
+    #print(y_preds)
     RocCurveDisplay.from_predictions(y_trues, y_preds)
     plt.savefig("roc_curve.png")
     # =======================================================================#
