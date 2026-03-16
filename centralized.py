@@ -10,7 +10,7 @@ import glob
 from torch.utils.data import TensorDataset, random_split, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
-from sklearn.metrics import roc_auc_score, average_precision_score, RocCurveDisplay
+from sklearn.metrics import roc_auc_score, average_precision_score, PrecisionRecallDisplay, RocCurveDisplay
 from torch.distributed import init_process_group, destroy_process_group
 
 ########## set device (torchrun parallellization)
@@ -22,7 +22,6 @@ def ddp_setup():
 seed = 42
 np.random.seed(seed)
 torch.manual_seed(seed)
-batch_size = 64
 ##########
 
 # =========================================================================#
@@ -190,18 +189,18 @@ def _save_snap(model, epoch, snapshot_path="snapshot.pt"):
 # ========================== Training Functions ===========================#
 # =========================================================================#
 def train_loop(epoch, chunk, dataloader, model, optimizer, loss_function, device, snapshot_path="snapshot.pt"):
-    model.to(device)
     if os.path.exists(snapshot_path):
         print("Loading snapshot...")
         epochs_run = _load_snap(model, device, snapshot_path)
+
     # model to training mode (important to correctly handle dropout or batchnorm layers)
     model.train()
+
     # allocation
     total_loss = 0  # accumulated loss
     n_entries = 0   # accumulated number of data points
     # progress bar def
     train_pbar = tqdm(dataloader, desc="Training Epoch {epoch:2d} Chunk {chunk:2d}".format(epoch=epoch, chunk=chunk), leave=True)
-    train_correct = []
 
     sigmoid = torch.nn.Sigmoid().to(device)
     # training loop
@@ -213,9 +212,6 @@ def train_loop(epoch, chunk, dataloader, model, optimizer, loss_function, device
             x, y = x.to(device), y.to(device)
             pred = model(x)
             curr_loss = loss_function(pred, y)
-            with torch.no_grad():
-                train_correct.append((sigmoid(pred).argmax(1) == y).sum().item())
-
             curr_loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -230,11 +226,10 @@ def train_loop(epoch, chunk, dataloader, model, optimizer, loss_function, device
     return total_loss / n_entries
 
 def eval_loop(epoch, chunk, dataloader, model, loss_function, device):
-
     # model to evaluation mode (important to correctly handle dropout or batchnorm layers)
     model.eval()
-
     y_trues, y_preds = [], []
+    
     # allocation
     total_loss = 0  # accumulated loss
     n_entries = 0   # accumulated number of data points
@@ -257,19 +252,23 @@ def eval_loop(epoch, chunk, dataloader, model, loss_function, device):
                 if len(np.unique(yt.cpu())) == 2: 
                     # if both positive and negative truth values are present, compute the avg. precision
                     avg_precisions.append(average_precision_score(yt.cpu(), sigmoid(pred).cpu()))
-                    roc_aucs.append(roc_auc_score(yt.cpu(), sigmoid(pred).cpu().argmax(1)))
+                    roc_aucs.append(roc_auc_score(yt.cpu(), sigmoid(pred).cpu()))
                     if len(y_trues) > 0 and len(y_preds) > 0:
                         y_trues = torch.cat((y_trues, torch.flatten(yt.cpu())))
-                        y_preds = torch.cat((y_preds, torch.flatten(sigmoid(pred).cpu().argmax(1))))
+                        y_preds = torch.cat((y_preds, torch.flatten(sigmoid(pred).cpu())))
                     else:
                         y_trues = torch.flatten(yt.cpu())
-                        y_preds = torch.flatten(sigmoid(pred).cpu().argmax(1))
+                        y_preds = torch.flatten(sigmoid(pred).cpu())
                 
             # Update accumulated values
             total_loss += curr_loss.detach().cpu().numpy()
             n_entries += len(traces)
             # Update progress bar
-            eval_pbar.set_postfix({'loss': total_loss / n_entries, 'avg_precision': np.mean(avg_precisions), 'roc_auc_score': np.mean(roc_aucs)})
+            eval_pbar.set_postfix({
+                'loss': total_loss / n_entries, 
+                'avg_prec': np.mean(avg_precisions), 
+                'roc_auc': np.mean(roc_aucs)
+            })
     eval_pbar.close()
     return y_trues, y_preds, total_loss / n_entries, np.mean(avg_precisions), np.mean(roc_aucs)
 ##########
@@ -278,23 +277,26 @@ def eval_loop(epoch, chunk, dataloader, model, loss_function, device):
 # ========================= Training PROCEDURE ============================#
 # =========================================================================#
 
-def main():
+def main(num_rounds, num_chunks):
     ddp_setup()
     gpu_id = int(os.environ["LOCAL_RANK"])
     # =============== Define model ============================================#
     tqdm.write("Define model...")
     model = ResNet1d(input_dim=(12, 4096),
-                         blocks_dim=list(zip([64, 128, 196, 256, 320], # net_filter_size
-                             [4096, 1024, 256, 64, 16])), # net_sequence_length
+                         blocks_dim=list(zip([64, 128, 196, 256], # net_filter_size
+                             [4096, 1024, 256, 64])), # net_sequence_length
                          n_classes=1,
                          kernel_size=17,
-                         dropout_rate=0.4) # CustomCNN()
+                         dropout_rate=0.4) 
+    # model = CustomCNN()
     tqdm.write("Done!\n")
     
-    learning_rate = 1e-4
-    weight_decay = 1e-1
-    num_epochs = 3 # 10
-    pos_weight = torch.tensor([49], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
+    learning_rate = 1e-5
+    weight_decay = 1e-3
+    num_epochs = num_rounds # 10
+    batch_size = 256
+
+    pos_weight = torch.tensor([48], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
     
     # =============== Define loss function ====================================#
     loss_function = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -309,7 +311,7 @@ def main():
     tqdm.write("Done!\n")
     
     # =============== Define lr scheduler =====================================#
-    lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=10)
+    lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=num_epochs)
    
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.to(gpu_id)
@@ -321,7 +323,9 @@ def main():
     tloaders = []
     vloaders = []
     
-    for i, filepath in enumerate(glob.glob("data/code15-12l/*.hdf5")[:10]):
+    size = len(glob.glob("data/code15-12l/*.hdf5")) if num_chunks == -1 else num_chunks
+
+    for i, filepath in enumerate(sorted(glob.glob("data/code15-12l/*.hdf5"))[:size]):
         path_to_h5_train, path_to_csv_train = filepath, 'data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
         
         # load traces
@@ -335,40 +339,58 @@ def main():
         df.set_index('exam_id', inplace=True)
         df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
         labels = torch.tensor(np.array(df['AF'], dtype=np.float16), dtype=torch.float16, device=gpu_id).reshape(-1,1)
-        print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1]))
-        print(">> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1]))
+        #print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1])) #print(">> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1]))
+
         # load dataset
         dataset = TensorDataset(traces, labels)
         len_dataset = len(dataset)
         n_classes = len(torch.unique(labels))
         del traces, labels
     
-        # split data
-        dataset_train, dataset_valid = random_split(dataset, lengths=[0.7,0.3])
-        
         # build data loaders
-        tloaders.append(DataLoader(dataset_train, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset_train)))
-        vloaders.append(DataLoader(dataset_valid, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset_valid)))
-        print("at", i, " >> done!")
+        if filepath.replace("data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
+            vloaders.append(dataset)
+            print("at", filepath, " >> put in validation!")
+        else:
+            tloaders.append(DataLoader(dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset)))
+            print("at", filepath, " >> put in training!")
+
+    vloader = DataLoader(torch.utils.data.ConcatDataset(vloaders), batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset))
     
     tqdm.write("Done!\n")
-    
+
     # =============== Train model =============================================#
     tqdm.write("Training...")
     best_loss = np.inf
+
     # allocation
     avgpreclist, rocauclist = [], []
     y_trues, y_preds = [], []
     train_loss_all, valid_loss_all = [], []
 
+    counter = 0
+    
     # loop over epochs
     for epoch in tqdm(range(1, num_epochs + 1)):
         for i in range(len(tloaders)):
             # training loop
             train_loss = train_loop(epoch, i, tloaders[i], model, optimizer, loss_function, device=gpu_id)
+
             # validation loop
-            yt, ypred, valid_loss, avg_precisions, avg_roc_aucs = eval_loop(epoch, i, vloaders[i], model, loss_function, device=gpu_id)
-        
+            yt, ypred, valid_loss, avg_precisions, avg_roc_aucs = eval_loop(
+                epoch, i, vloader, 
+                model, loss_function, 
+                device=gpu_id
+            )
+
+            # collect losses
+            train_loss_all.append(train_loss)
+            valid_loss_all.append(valid_loss)
+            
+            # collect validation metrics
+            avgpreclist.append(avg_precisions)
+            rocauclist.append(avg_roc_aucs)
+
             # collect classifications and truth labels
             if len(y_trues) > 0 and gpu_id == 0:
                 y_trues = torch.cat((y_trues, yt))
@@ -377,11 +399,57 @@ def main():
                 y_trues = yt
                 y_preds = ypred
 
-        # save best model: 
-        # here we save the model only for the lowest validation loss
+            pd.DataFrame({
+                    "epoch": np.arange(counter+1), 
+                    "train_loss": train_loss_all, 
+                    "valid_loss": valid_loss_all, 
+                    "mAP": avgpreclist, 
+                    "ROC/AUC": rocauclist
+            }).to_csv(f"results-lr{learning_rate}-epochs{num_epochs}-exams{list(range(num_chunks))}.csv", index=False)
+
+            # save checkpoints between epochs
+            if gpu_id == 0:
+                _save_snap(model, epoch)
+ 
+            # =============== PLOTTING  =============================================#
+            PrecisionRecallDisplay.from_predictions(y_trues, y_preds) 
+            #ax.fill_between() ----> uncertainties
+            plt.savefig("pr_curve.png", dpi=300)
+            plt.close()
+            
+            fig2 = plt.figure(figsize=(8,6), dpi=300)
+            ax2 = fig2.add_subplot()
+            ax2.set_title("Train-Validation Loss Curves - CODE-15% Centralized Training")
+            ax2.set_xlabel("Iterations")
+            ax2.set_ylabel("BCE Loss")
+            ax2.plot(np.arange(counter+1)/len(tloaders), train_loss_all, color="blue", label="Train")
+            ax2.plot(np.arange(counter+1)/len(tloaders), valid_loss_all, color="orange", label="Validation")
+            ax2.legend(loc="best")
+            fig2.tight_layout()
+            fig2.savefig("losses-centralizedcode15.png")
+
+            RocCurveDisplay.from_predictions(y_trues, y_preds)
+            plt.savefig("roc_curve.png", dpi=300)
+            plt.close()
+        
+            fig = plt.figure(figsize=(8,6), dpi=300)
+            ax = fig.add_subplot()
+            ax.set_title("PR-AUC and ROC-AUC - CODE-15% Centralized Training")
+            ax.set_xlabel("Iterations")
+            ax.set_ylabel("Average Precision")
+            ax.plot(np.arange(counter+1)/len(tloaders), avgpreclist, color="blue", label="PR-AUC")
+            ax.plot(np.arange(counter+1)/len(tloaders), rocauclist, color="orange", label="ROC/AUC")
+            ax.legend(loc="best")
+            fig.tight_layout()
+            fig.savefig("pr+roc_aucs-centralizedcode15.png")
+
+            plt.close()
+            counter += 1
+
+        # save best model: here we save the model only for the lowest validation loss
         if valid_loss < best_loss and gpu_id == 0:
             # Save model parameters
-            torch.save({'model': model.state_dict()}, 'resnet-model-code15.pth')
+            torch.save({'model': model.state_dict()}, 'resnetmodel-centralizedcode15.pth')
             # Update best validation loss
             best_loss = valid_loss
             # statement
@@ -393,34 +461,6 @@ def main():
         if lr_scheduler:
             print("scheduler updated lr ...")
             lr_scheduler.step()
-        
-        # collect losses
-        train_loss_all.append(np.mean(train_loss))
-        valid_loss_all.append(np.mean(valid_loss))
-            
-        # collect validation metrics
-        avgpreclist.append(avg_precisions)
-        rocauclist.append(avg_roc_aucs)
-         
-        # save checkpoints between epochs
-        if gpu_id == 0:
-            _save_snap(model, epoch)
-
-            # =============== PLOTTING  =============================================#
-            fig, ax = plt.subplots()
-            fig.suptitle("Mean AP and Mean ROCAUC - CODE-15%")
-            ax.plot(np.arange(epoch), avgpreclist)
-            ax.plot(np.arange(epoch), rocauclist)
-            fig.savefig("mAP-centralized-code15.png")
-    
-            fig2, ax2 = plt.subplots()
-            fig2.suptitle("Train-Validation Loss Curves - CODE-15%")
-            ax2.plot(np.arange(epoch), train_loss_all)
-            ax2.plot(np.arange(epoch), valid_loss_all)
-            fig2.savefig("loss-curves-centralized-code15.png")
-
-            PrecisionRecallDisplay.from_predictions(y_trues, y_preds)
-            plt.savefig("pr_curve.png")
 
         # Print message
         tqdm.write('Epoch {epoch:2d}: \t'
@@ -432,13 +472,7 @@ def main():
                             valid_loss=valid_loss,
                             model_save=model_save_state))
     destroy_process_group()
-    
-    #print(y_trues)
-    #time.sleep(5)
-    #print(y_preds)
-    RocCurveDisplay.from_predictions(y_trues, y_preds)
-    plt.savefig("roc_curve.png")
     # =======================================================================#
 
 if __name__ == "__main__":
-    main()
+    main(num_rounds=8, num_chunks=15)
