@@ -14,171 +14,22 @@ from torch.utils.data import DataLoader, TensorDataset, Subset, random_split, Co
 from flwr.common import Scalar, Context
 from typing import Callable, Dict, List, OrderedDict, Union, Optional, Tuple
 
-###################################################################
-###################################################################
-def _padding(downsample, kernel_size):
-    """Compute required padding"""
-    padding = max(0, int(np.floor((kernel_size - downsample + 1) / 2)))
-    return padding
-
-def _downsample(n_samples_in, n_samples_out):
-    """Compute downsample rate"""
-    downsample = int(n_samples_in // n_samples_out)
-    if downsample < 1:
-        raise ValueError("Number of samples should always decrease")
-    if n_samples_in % n_samples_out != 0:
-        raise ValueError("Number of samples for two consecutive blocks "
-                         "should always decrease by an integer factor.")
-    return downsample
-
-class ResBlock1d(nn.Module):
-    """Residual network unit for unidimensional signals."""
-
-    def __init__(self, n_filters_in, n_filters_out, downsample, kernel_size, dropout_rate):
-        if kernel_size % 2 == 0:
-            raise ValueError("The current implementation only support odd values for `kernel_size`.")
-        super(ResBlock1d, self).__init__()
-        # Forward path
-        padding = _padding(1, kernel_size)
-        self.conv1 = nn.Conv1d(n_filters_in, n_filters_out, kernel_size, padding=padding, bias=False)
-        self.bn1 = nn.BatchNorm1d(n_filters_out)
-        self.relu = nn.ReLU()
-        self.dropout1 = nn.Dropout(dropout_rate)
-        padding = _padding(downsample, kernel_size)
-        self.conv2 = nn.Conv1d(n_filters_out, n_filters_out, kernel_size,
-                               stride=downsample, padding=padding, bias=False)
-        self.bn2 = nn.BatchNorm1d(n_filters_out)
-        self.dropout2 = nn.Dropout(dropout_rate)
-
-        # Skip connection
-        skip_connection_layers = []
-        # Deal with downsampling
-        if downsample > 1:
-            maxpool = nn.MaxPool1d(downsample, stride=downsample)
-            skip_connection_layers += [maxpool]
-        # Deal with n_filters dimension increase
-        if n_filters_in != n_filters_out:
-            conv1x1 = nn.Conv1d(n_filters_in, n_filters_out, 1, bias=False)
-            skip_connection_layers += [conv1x1]
-        # Build skip conection layer
-        if skip_connection_layers:
-            self.skip_connection = nn.Sequential(*skip_connection_layers)
-        else:
-            self.skip_connection = None
-
-    def forward(self, x, y):
-        """Residual unit."""
-        if self.skip_connection is not None:
-            y = self.skip_connection(y)
-        else:
-            y = y
-        # 1st layer
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.dropout1(x)
-
-        # 2nd layer
-        x = self.conv2(x)
-        x += y  # Sum skip connection and main connection
-        y = x
-        x = self.bn2(x)
-        x = self.relu(x)
-        x = self.dropout2(x)
-        return x, y
-
-class ResNet1d(nn.Module):
-    """Residual network for unidimensional signals.
-    Parameters
-    ----------
-    input_dim : tuple
-        Input dimensions. Tuple containing dimensions for the neural network
-        input tensor. Should be like: ``(n_filters, n_samples)``.
-    blocks_dim : list of tuples
-        Dimensions of residual blocks.  The i-th tuple should contain the dimensions
-        of the output (i-1)-th residual block and the input to the i-th residual
-        block. Each tuple shoud be like: ``(n_filters, n_samples)``. `n_samples`
-        for two consecutive samples should always decrease by an integer factor.
-    dropout_rate: float [0, 1), optional
-        Dropout rate used in all Dropout layers. Default is 0.8
-    kernel_size: int, optional
-        Kernel size for convolutional layers. The current implementation
-        only supports odd kernel sizes. Default is 17.
-    References
-    ----------
-    .. [1] K. He, X. Zhang, S. Ren, and J. Sun, "Identity Mappings in Deep Residual Networks,"
-           arXiv:1603.05027, Mar. 2016. https://arxiv.org/pdf/1603.05027.pdf.
-    .. [2] K. He, X. Zhang, S. Ren, and J. Sun, "Deep Residual Learning for Image Recognition," in 2016 IEEE Conference
-           on Computer Vision and Pattern Recognition (CVPR), 2016, pp. 770-778. https://arxiv.org/pdf/1512.03385.pdf
-    """
-    # list(zip([64, 128, 196, 256, 320], [4096, 1024, 256, 64, 16]))
-    def __init__(self, n_classes, 
-                 input_dim=(12, 4096), 
-                 blocks_dim=list(zip([64, 128, 320], [4096, 1024, 16])), 
-                 kernel_size=17, 
-                 dropout_rate=0.4):
-        super(ResNet1d, self).__init__()
-        # First layers
-        n_filters_in, n_filters_out = input_dim[0], blocks_dim[0][0]
-        n_samples_in, n_samples_out = input_dim[1], blocks_dim[0][1]
-        downsample = _downsample(n_samples_in, n_samples_out)
-        padding = _padding(downsample, kernel_size)
-        self.conv1 = nn.Conv1d(n_filters_in, n_filters_out, kernel_size, bias=False,
-                               stride=downsample, padding=padding)
-        self.bn1 = nn.BatchNorm1d(n_filters_out)
-
-        # Residual block layers
-        self.res_blocks = []
-        for i, (n_filters, n_samples) in enumerate(blocks_dim):
-            n_filters_in, n_filters_out = n_filters_out, n_filters
-            n_samples_in, n_samples_out = n_samples_out, n_samples
-            downsample = _downsample(n_samples_in, n_samples_out)
-            resblk1d = ResBlock1d(n_filters_in, n_filters_out, downsample, kernel_size, dropout_rate)
-            self.add_module('resblock1d_{0}'.format(i), resblk1d)
-            self.res_blocks += [resblk1d]
-
-        # Linear layer
-        n_filters_last, n_samples_last = blocks_dim[-1]
-        last_layer_dim = n_filters_last * n_samples_last
-        self.lin = nn.Linear(last_layer_dim, n_classes)
-        self.n_blk = len(blocks_dim)
-
-    def forward(self, x):
-        """Implement ResNet1d forward propagation"""
-        # First layers
-        x = x.transpose(2,1)
-        x = self.conv1(x)
-        x = self.bn1(x)
-
-        # Residual blocks
-        y = x
-        for blk in self.res_blocks:
-            x, y = blk(x, y)
-
-        # Flatten array
-        x = x.view(x.size(0), -1)
-
-        # Fully conected layer
-        x = self.lin(x)
-        return x
-
-###################################################################
-###################################################################
+from pytorchexample.resnet import ResNet1d
 
 fds = None  # Cache FederatedDataset
 
 def load_centralized_dataset():
     """Load test set and return dataloader."""
-    # Load entire test set
-    filepath = "../../data/code15-12l/exams_part3.hdf5"
-    path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
+    # Load entire test set (selected to be exams_part0, exams_part1, 2 and 3)
+    filepath = "../../data/code15-12l/exams_part3.hdf5" # TODO: Make this to exams_part0,1,2 also
+    path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv' 
     print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
     f = h5py.File(path_to_h5_train, 'r')
     traces = torch.tensor(f['tracings'][()], dtype=torch.float32)[:-1,:,:]
     df = pd.read_csv(path_to_csv_train)
     df.set_index('exam_id', inplace=True)
     df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
-    labels = torch.tensor(np.array(df['AF'], dtype=np.float32), dtype=torch.float32).reshape(-1,1)
+    labels = torch.tensor(np.array(df[['AF', 'age']], dtype=np.float32), dtype=torch.float32).reshape(-1,2)
     dataset = TensorDataset(traces, labels)
     return DataLoader(dataset, batch_size=128)
 
@@ -193,17 +44,19 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
     }
     for i, filepath in enumerate(glob.glob("../../data/code15-12l/*.hdf5")[:5]):
         prefix = filepath.replace("data/code15-12l/", "").replace(".hdf5", "")
-        path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
+        path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv' 
         print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
+
         # load traces
         f = h5py.File(path_to_h5_train, 'r')
-        traces = np.array(f['tracings'][()], dtype=np.float32)[:-1,:,:]
+        traces = np.array(f['tracings'][()], dtype=np.float16)[:-1,:,:]
         print("traces successfully converted to tensors ...")
+
         # load labels
         df = pd.read_csv(path_to_csv_train)
         df.set_index('exam_id', inplace=True)
         df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
-        labels = np.array(df['AF'], dtype=np.float32).reshape(-1,1)
+        labels = np.array(df[['AF', 'age']], dtype=np.float16).reshape(-1,2) 
         
         if len(trains["features"]) > 0:
             trains["features"] = np.vstack((trains["features"], traces))
@@ -213,12 +66,11 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             trains["features"] = traces
             trains["labels"] = labels
 
-    trainset = TensorDataset(torch.tensor(trains["features"], dtype=torch.float32), torch.tensor(trains["labels"], dtype=torch.float32))
+    trainset = TensorDataset(torch.tensor(trains["features"], dtype=torch.float16), torch.tensor(trains["labels"], dtype=torch.float16)) # TODO: This will be very memory intensive.
     trains, testset = random_split(trainset, [0.8, 0.2])
     print("Dataset prepared with_format('torch') >>", trains)
 
-    # partition the data
-    # courtesy: https://flower.ai/docs/baselines/niid_bench.html
+    # partition the data -- courtesy: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
         alpha = 0.5
         min_required_samples_per_client = 10
@@ -231,7 +83,9 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             tmp_t = np.array(tmp_t)
         if isinstance(tmp_t, torch.Tensor):
             tmp_t = tmp_t.numpy()
-        targets = tmp_t.flatten()
+        print("PARTITIONING NOW >>", partitioning, tmp_t)
+        targets = tmp_t[:,1].flatten()
+        print("FLATTENED", targets)
         num_classes = len(set(targets))
         total_samples = len(targets)
 
@@ -257,22 +111,10 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
 
         trainsets_per_client = [Subset(trainset, idxs) for idxs in idx_clients]
         return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=4), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
-    elif partitioning == "label_quantity":
-        """
-        labels_per_client = 2
-        if "labels_per_client" in config:
-            labels_per_client = config.labels_per_client
-        datasets, testset = partition_data_label_quantity(
-            num_clients,
-            labels_per_client=labels_per_client,
-            seed=seed,
-            dataset_name=config.name,
-        )
-        """
-    # courtesy: https://flower.ai/docs/baselines/niid_bench.html
     elif partitioning == "iid": 
         similarity = 0.6
         trainsets_per_client = []
+
         # for s% similarity sample iid data per client
         s_fraction = int(similarity * len(trains))
         prng = np.random.default_rng(seed)
@@ -298,9 +140,11 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             tmp_t = np.array(tmp_t)
         if isinstance(tmp_t, torch.Tensor):
             tmp_t = tmp_t.numpy()
-        targets = tmp_t[rem_trainset.indices].flatten()
+        targets = tmp_t[rem_trainset.indices,1].flatten()
         num_remaining_classes = len(set(targets))
         remaining_classes = list(set(targets))
+        print(num_remaining_classes)
+        print(remaining_classes)
         client_classes: List[List] = [[] for _ in range(num_partitions)]
         times = [0 for _ in range(num_remaining_classes)]
 
@@ -338,8 +182,9 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             )
 
         return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=4), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
-    else:
+    else: # if any other partitioning strategy given that is not implemented here >>
         raise NotImplementedError
+
     return trainloaders, testloader
 
 
@@ -359,12 +204,14 @@ def train_fedavg(
     for x, y in trainloader:
         count += 1
     print(count, epochs, learning_rate)
+
     criterion = nn.BCEWithLogitsLoss()
     optimizer = Adam(net.parameters(), lr=learning_rate) #,weight_decay=weight_decay)
-    #optimizer = SGD(net.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+
     loss = 0
     for i in range(epochs):
         loss, net = _train_one_epoch(net, device, trainloader, criterion, optimizer, i)
+
     return loss, net
 
 def _train_one_epoch(
@@ -407,14 +254,15 @@ def test(net, testloader: DataLoader, device,) -> Tuple[float, float]: # == rank
     net.to(device)
     net.eval()
     criterion = nn.BCEWithLogitsLoss() # nn.CrossEntropyLoss(reduction="sum")
-    loss = 0.0
     sigmoid = nn.Sigmoid().to(device)
+
     avg_precisions = []  # avg precision (pr-auc)
+    loss = 0.0
 
     with torch.no_grad():
         for data, target in testloader:
             assert not isinstance(data, str), "FAULTY DATALOADER ... Check your data loading."
-            data, target = data.to(device), target.to(device)
+            data, target = data.to(device), target[:,0].reshape(-1,1).to(device)
             output = net(data)
             loss += criterion(output, target).item()
             if len(np.unique(target.cpu())) == 2: 
