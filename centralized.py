@@ -7,11 +7,12 @@ import h5py
 import pandas as pd
 import matplotlib.pyplot as plt
 import glob
-from torch.utils.data import TensorDataset, random_split, DataLoader
+from torch.utils.data import TensorDataset, random_split, DataLoader, ConcatDataset
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from sklearn.metrics import roc_auc_score, average_precision_score, PrecisionRecallDisplay, RocCurveDisplay
 from torch.distributed import init_process_group, destroy_process_group
+from resnet import ResNet1d
 
 ########## set device (torchrun parallellization)
 def ddp_setup():
@@ -24,157 +25,11 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 ##########
 
-# =========================================================================#
-########## Model
-# =========================================================================#
-def _padding(downsample, kernel_size):
-    """Compute required padding"""
-    padding = max(0, int(np.floor((kernel_size - downsample + 1) / 2)))
-    return padding
-
-def _downsample(n_samples_in, n_samples_out):
-    """Compute downsample rate"""
-    downsample = int(n_samples_in // n_samples_out)
-    if downsample < 1:
-        raise ValueError("Number of samples should always decrease")
-    if n_samples_in % n_samples_out != 0:
-        raise ValueError("Number of samples for two consecutive blocks "
-                         "should always decrease by an integer factor.")
-    return downsample
-
-class ResBlock1d(nn.Module):
-    """Residual network unit for unidimensional signals."""
-
-    def __init__(self, n_filters_in, n_filters_out, downsample, kernel_size, dropout_rate):
-        if kernel_size % 2 == 0:
-            raise ValueError("The current implementation only support odd values for `kernel_size`.")
-        super(ResBlock1d, self).__init__()
-        # Forward path
-        padding = _padding(1, kernel_size)
-        self.conv1 = nn.Conv1d(n_filters_in, n_filters_out, kernel_size, padding=padding, bias=False)
-        self.bn1 = nn.BatchNorm1d(n_filters_out)
-        self.relu = nn.ReLU()
-        self.dropout1 = nn.Dropout(dropout_rate)
-        padding = _padding(downsample, kernel_size)
-        self.conv2 = nn.Conv1d(n_filters_out, n_filters_out, kernel_size,
-                               stride=downsample, padding=padding, bias=False)
-        self.bn2 = nn.BatchNorm1d(n_filters_out)
-        self.dropout2 = nn.Dropout(dropout_rate)
-
-        # Skip connection
-        skip_connection_layers = []
-        # Deal with downsampling
-        if downsample > 1:
-            maxpool = nn.MaxPool1d(downsample, stride=downsample)
-            skip_connection_layers += [maxpool]
-        # Deal with n_filters dimension increase
-        if n_filters_in != n_filters_out:
-            conv1x1 = nn.Conv1d(n_filters_in, n_filters_out, 1, bias=False)
-            skip_connection_layers += [conv1x1]
-        # Build skip conection layer
-        if skip_connection_layers:
-            self.skip_connection = nn.Sequential(*skip_connection_layers)
-        else:
-            self.skip_connection = None
-
-    def forward(self, x, y):
-        """Residual unit."""
-        if self.skip_connection is not None:
-            y = self.skip_connection(y)
-        else:
-            y = y
-        # 1st layer
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.dropout1(x)
-
-        # 2nd layer
-        x = self.conv2(x)
-        x += y  # Sum skip connection and main connection
-        y = x
-        x = self.bn2(x)
-        x = self.relu(x)
-        x = self.dropout2(x)
-        return x, y
-
-
-class ResNet1d(nn.Module):
-    """Residual network for unidimensional signals.
-    Parameters
-    ----------
-    input_dim : tuple
-        Input dimensions. Tuple containing dimensions for the neural network
-        input tensor. Should be like: ``(n_filters, n_samples)``.
-    blocks_dim : list of tuples
-        Dimensions of residual blocks.  The i-th tuple should contain the dimensions
-        of the output (i-1)-th residual block and the input to the i-th residual
-        block. Each tuple shoud be like: ``(n_filters, n_samples)``. `n_samples`
-        for two consecutive samples should always decrease by an integer factor.
-    dropout_rate: float [0, 1), optional
-        Dropout rate used in all Dropout layers. Default is 0.8
-    kernel_size: int, optional
-        Kernel size for convolutional layers. The current implementation
-        only supports odd kernel sizes. Default is 17.
-    References
-    ----------
-    .. [1] K. He, X. Zhang, S. Ren, and J. Sun, "Identity Mappings in Deep Residual Networks,"
-           arXiv:1603.05027, Mar. 2016. https://arxiv.org/pdf/1603.05027.pdf.
-    .. [2] K. He, X. Zhang, S. Ren, and J. Sun, "Deep Residual Learning for Image Recognition," in 2016 IEEE Conference
-           on Computer Vision and Pattern Recognition (CVPR), 2016, pp. 770-778. https://arxiv.org/pdf/1512.03385.pdf
-    """
-
-    def __init__(self, input_dim, blocks_dim, n_classes, kernel_size=17, dropout_rate=0.8):
-        super(ResNet1d, self).__init__()
-        # First layers
-        n_filters_in, n_filters_out = input_dim[0], blocks_dim[0][0]
-        n_samples_in, n_samples_out = input_dim[1], blocks_dim[0][1]
-        downsample = _downsample(n_samples_in, n_samples_out)
-        padding = _padding(downsample, kernel_size)
-        self.conv1 = nn.Conv1d(n_filters_in, n_filters_out, kernel_size, bias=False,
-                               stride=downsample, padding=padding)
-        self.bn1 = nn.BatchNorm1d(n_filters_out)
-
-        # Residual block layers
-        self.res_blocks = []
-        for i, (n_filters, n_samples) in enumerate(blocks_dim):
-            n_filters_in, n_filters_out = n_filters_out, n_filters
-            n_samples_in, n_samples_out = n_samples_out, n_samples
-            downsample = _downsample(n_samples_in, n_samples_out)
-            resblk1d = ResBlock1d(n_filters_in, n_filters_out, downsample, kernel_size, dropout_rate)
-            self.add_module('resblock1d_{0}'.format(i), resblk1d)
-            self.res_blocks += [resblk1d]
-
-        # Linear layer
-        n_filters_last, n_samples_last = blocks_dim[-1]
-        last_layer_dim = n_filters_last * n_samples_last
-        self.lin = nn.Linear(last_layer_dim, n_classes)
-        self.n_blk = len(blocks_dim)
-
-    def forward(self, x):
-        """Implement ResNet1d forward propagation"""
-        # First layers
-        x = x.transpose(2,1)
-        x = self.conv1(x)
-        x = self.bn1(x)
-
-        # Residual blocks
-        y = x
-        for blk in self.res_blocks:
-            x, y = blk(x, y)
-
-        # Flatten array
-        x = x.view(x.size(0), -1)
-
-        # Fully conected layer
-        x = self.lin(x)
-        return x
-
-def _load_snap(model, gpu_id, snapshot_path):
+def _load_snap(model, gpu_id, snapshot_path="snapshot.pt"):
     loc = f'cuda:{gpu_id}'
     snapshot = torch.load(snapshot_path, map_location=loc)
     model.module.load_state_dict(snapshot["MODEL_STATE"])
-    print(f"=== Loaded an existing snapshot -- device: {gpu_id} ===")
+    print(f"=== Loaded an existing snapshot -- device: {gpu_id} === at {snapshot_path}")
     return snapshot["EPOCHS_RUN"]
 
 def _save_snap(model, epoch, snapshot_path="snapshot.pt"):
@@ -292,10 +147,10 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
     # model = CustomCNN()
     tqdm.write("Done!\n")
     
-    learning_rate = 1e-4
+    learning_rate = 1e-3
     weight_decay = 0.1
     num_epochs = num_rounds # 10
-    batch_size = 512
+    batch_size = 256
 
     pos_weight = torch.tensor([48], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
     
@@ -317,6 +172,8 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.to(gpu_id)
     model = DDP(model, device_ids=[gpu_id])
+
+    train_files_list = sorted(glob.glob("data/code15-12l/*.hdf5"))
 
     # =============== Build data loaders ======================================#
     tqdm.write("Building data loaders...")
@@ -348,11 +205,12 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
             #len_dataset = len(dataset)
             #n_classes = len(torch.unique(labels))
         
+            train_files_list.remove(filepath)
             vloaders.append(dataset)
             print("at", filepath, " >> put in validation!")
 
     vset = torch.utils.data.ConcatDataset(vloaders)
-    vloader = DataLoader(vset, batch_size=512, shuffle=False, sampler=DistributedSampler(vset))
+    vloader = DataLoader(vset, batch_size=256, shuffle=False, sampler=DistributedSampler(vset))
 
     # =============== Train model =============================================#
     tqdm.write("Training...")
@@ -364,40 +222,45 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
     lrs = []
     counter = 0
 
-    size = len(glob.glob("data/code15-12l/*.hdf5")) if num_chunks == -1 else num_chunks
+    size = len(train_files_list) if num_chunks == -1 else num_chunks
+
     # loop over epochs
     for epoch in tqdm(range(1, num_epochs + 1)):
-        for i, filepath in enumerate(sorted(glob.glob("data/code15-12l/*.hdf5"))[:size]):
-            # build data loaders
-            if filepath.replace("data/code15-12l/", "") not in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
-                path_to_h5_train, path_to_csv_train = filepath, 'data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
-            
-                # load traces
-                f = h5py.File(path_to_h5_train, 'r')
-                traces = torch.tensor(np.array(f['tracings'], dtype=np.float32), dtype=torch.float32)[:-1,:,:]
+        for i, filepath in enumerate(train_files_list[:size]):
+            if i > size-4:
+                break
+            if i % 4 == 0:
+                datasets = []
+                gap = 4 if len(train_files_list[:size])-4 >= i else len(train_files_list[:size])-i
+                for j in range(gap):
+                    # build data loaders
+                    path_to_h5_train, path_to_csv_train = train_files_list[i+j], 'data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
                 
-                # load labels
-                ids_traces = np.array(f['exam_id'])
-                df = pd.read_csv(path_to_csv_train)
-                #df = df.drop_duplicates(subset=['patient_id'])
-                f.close()
-                df.set_index('exam_id', inplace=True)
-                df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
-                labels = torch.tensor(np.array(df['AF'], dtype=np.float16), dtype=torch.float16, device=gpu_id).reshape(-1,1)
-                #traces = traces[:labels.shape[0],:,:]
-                print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1])) 
-                print(">> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1]))
-        
+                    # load traces
+                    f = h5py.File(path_to_h5_train, 'r')
+                    traces = torch.tensor(np.array(f['tracings'], dtype=np.float32), dtype=torch.float32)[:-1,:,:]
+                    
+                    # load labels
+                    ids_traces = np.array(f['exam_id'])
+                    df = pd.read_csv(path_to_csv_train)
+                    #df = df.drop_duplicates(subset=['patient_id'])
+                    #traces = traces[:labels.shape[0],:,:]
+                    f.close()
+
+                    df = df.set_index('exam_id')
+                    df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
+                    labels = torch.tensor(np.array(df['AF'], dtype=np.float16), dtype=torch.float16, device=gpu_id).reshape(-1,1)
+                    print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1])) 
+                    print(">> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1]))
+                    datasets.append(TensorDataset(traces, labels))
+                
                 # load dataset
-                dataset = TensorDataset(traces, labels)
-                #len_dataset = len(dataset)
-                #n_classes = len(torch.unique(labels))
-                
+                dataset = ConcatDataset(datasets)
                 tloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset, shuffle=True))
             
                 # training loop
-                train_loss = train_loop(epoch, filepath.replace("data/code15-12l/", ""), tloader, model, optimizer, loss_function, device=gpu_id)
-    
+                train_loss = train_loop(epoch, filepath.replace("data/code15-12l/", ""), tloader, model, optimizer, loss_function, device=gpu_id, snapshot_path=f"{id_}-snapshot.pt")
+
                 # validation loop
                 yt, ypred, valid_loss, avg_precisions, avg_roc_aucs = eval_loop(
                     epoch, i, vloader, 
@@ -412,10 +275,10 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
                 # collect validation metrics
                 avgpreclist.append(avg_precisions)
                 rocauclist.append(avg_roc_aucs)
-    
+
                 # save checkpoints between epochs
                 if gpu_id == 0:
-                    _save_snap(model, epoch)
+                    _save_snap(model, epoch, snapshot_path=f"{id_}-snapshot.pt")
                     pd.DataFrame({
                         "epoch": np.arange(counter+1), 
                         "train_loss": train_loss_all, 
@@ -423,7 +286,7 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
                         "mAP": avgpreclist, 
                         "ROC/AUC": rocauclist
                     }).to_csv(f"{id_}-results-partwise-lr{learning_rate}-ep{num_epochs}-exams{size-4}.csv", index=False)
-     
+        
                     # =============== PLOTTING  =============================================#
                     PrecisionRecallDisplay.from_predictions(yt, ypred) 
                     #precision, recall, thresholds = precision_recall_curve(yt, ypred)
@@ -436,8 +299,8 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
                     ax2.set_title("Train-Validation Loss Curves - CODE-15% Centralized Training")
                     ax2.set_xlabel("Iterations")
                     ax2.set_ylabel("BCE Loss")
-                    ax2.plot(np.arange(counter+1)/(size-4), train_loss_all, color="blue", label="Train")
-                    ax2.plot(np.arange(counter+1)/(size-4), valid_loss_all, color="orange", label="Validation")
+                    ax2.plot(np.arange(counter+1), train_loss_all, color="blue", label="Train")
+                    ax2.plot(np.arange(counter+1), valid_loss_all, color="orange", label="Validation")
                     ax2.legend(loc="best")
                     fig2.tight_layout()
                     fig2.savefig(f"{id_}-losses-partwise-centralizedcode15.png")
@@ -452,22 +315,22 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
                     ax.set_title("PR-AUC and ROC-AUC - CODE-15% Centralized Training")
                     ax.set_xlabel("Iterations")
                     ax.set_ylabel("Average Precision")
-                    ax.plot(np.arange(counter+1)/(size-4), avgpreclist, color="blue", label="PR-AUC")
-                    ax.plot(np.arange(counter+1)/(size-4), rocauclist, color="orange", label="ROC/AUC")
+                    ax.plot(np.arange(counter+1), avgpreclist, color="blue", label="PR-AUC")
+                    ax.plot(np.arange(counter+1), rocauclist, color="orange", label="ROC/AUC")
                     ax.legend(loc="best")
                     fig.tight_layout()
                     fig.savefig(f"{id_}-pr+roc_aucs-partwise-centralizedcode15.png") 
                     plt.close()
+            
+                    # save best model: here we save the model only for the lowest validation loss
+                    if valid_loss < best_loss:
+                        # Save model parameters
+                        torch.save({'model': model.state_dict()}, f'{id_}-resnetmodel-centralizedcode15-partwise.pth')
+                        # Update best validation loss
+                        best_loss = valid_loss        
 
                 counter += 1
 
-                # save best model: here we save the model only for the lowest validation loss
-                if valid_loss < best_loss and gpu_id == 0:
-                    # Save model parameters
-                    torch.save({'model': model.state_dict()}, f'{id_}-resnetmodel-centralizedcode15-partwise.pth')
-                    # Update best validation loss
-                    best_loss = valid_loss
-                
                 # statement
                 model_save_state = "best model -> saved" if valid_loss < best_loss else ""
                 
@@ -492,14 +355,14 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
             ax2.set_title("LR Scheduling - Centralized CODE-15%")
             ax2.set_xlabel("Iterations")
             ax2.set_ylabel("Learning Rate")
-            ax2.plot(np.arange(counter)/(size-4), lrs, color="blue")
+            ax2.plot(np.arange(counter), lrs, color="blue")
             ax2.grid(True)
             fig2.tight_layout()
             fig2.savefig(f"{id_}-lrscheduling-centralizedcode15.png")
             plt.close()
             lr_scheduler.step(avgpreclist[-1])
-        if lrs[-1] < 1e-7:
-            sys.exit(0)
+        #if lrs[-1] < 1e-8:
+        #    sys.exit(0)
                     
     destroy_process_group()
     # =======================================================================#
