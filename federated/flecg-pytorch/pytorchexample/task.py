@@ -19,19 +19,39 @@ from pytorchexample.resnet import ResNet1d
 fds = None  # Cache FederatedDataset
 
 def load_centralized_dataset():
-    """Load test set and return dataloader."""
-    # Load entire test set (selected to be exams_part0, exams_part1, 2 and 3)
-    filepath = "../../data/code15-12l/exams_part3.hdf5" # TODO: Make this to exams_part0,1,2 also
-    path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv' 
-    print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
-    f = h5py.File(path_to_h5_train, 'r')
-    traces = torch.tensor(f['tracings'][()], dtype=torch.float32)[:-1,:,:]
-    df = pd.read_csv(path_to_csv_train)
-    df.set_index('exam_id', inplace=True)
-    df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
-    labels = torch.tensor(np.array(df[['AF', 'age']], dtype=np.float32), dtype=torch.float32).reshape(-1,2)
-    dataset = TensorDataset(traces, labels)
-    return DataLoader(dataset, batch_size=128)
+    """Load entire test set (selected to be exams_part0, exams_part1, 2 and 3) and return the dataloader."""
+    vloaders = []
+    for i, filepath in enumerate(sorted(glob.glob("../../data/code15-12l/*.hdf5"))):
+        # build data loaders
+        if filepath.replace("../../data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
+            path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv'
+            # load traces
+            f = h5py.File(path_to_h5_train, 'r')
+            traces = torch.tensor(np.array(f['tracings'], dtype=np.float32), dtype=torch.float32)[:-1,:,:]
+            # load labels
+            ids_traces = np.array(f['exam_id'])
+            df = pd.read_csv(path_to_csv_train)
+            #df = df.drop_duplicates(subset=["patient_id"])
+            f.close()
+            df = df.set_index('exam_id')
+            df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
+            labels = torch.tensor(
+                np.array(df['AF'], dtype=np.float16), 
+                dtype=torch.float16
+                #, device=gpu_id
+            ).reshape(-1,1)
+            print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1]), "->> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1])) 
+            # load dataset
+            dataset = TensorDataset(traces, labels)
+            vloaders.append(dataset)
+            print("at", filepath, " >> put in validation!")
+
+    vset = torch.utils.data.ConcatDataset(vloaders)
+    return DataLoader(vset, 
+        batch_size=256, 
+        shuffle=False, 
+        #sampler=DistributedSampler(vset)
+    )
 
 # def load_data(partition_id: int, num_partitions: int, batch_size: int):
 def load_datasets(partition_id: int, num_partitions: int, batch_size: int, partitioning: str = "iid", seed: Optional[int] = 42) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
@@ -42,7 +62,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         "features": [],
         "labels": []
     }
-    for i, filepath in enumerate(glob.glob("../../data/code15-12l/*.hdf5")[:5]):
+    for i, filepath in enumerate(glob.glob("../../data/code15-12l/*.hdf5")[:2]):
         prefix = filepath.replace("data/code15-12l/", "").replace(".hdf5", "")
         path_to_h5_train, path_to_csv_train = filepath, '../../data/code15-12l/exams.csv' 
         print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
@@ -56,7 +76,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         df = pd.read_csv(path_to_csv_train)
         df.set_index('exam_id', inplace=True)
         df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
-        labels = np.array(df[['AF', 'age']], dtype=np.float16).reshape(-1,2) 
+        labels = np.array(df[['AF', 'age']], dtype=np.float32).reshape(-1,2) 
         
         if len(trains["features"]) > 0:
             trains["features"] = np.vstack((trains["features"], traces))
@@ -66,9 +86,9 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             trains["features"] = traces
             trains["labels"] = labels
 
-    trainset = TensorDataset(torch.tensor(trains["features"], dtype=torch.float16), torch.tensor(trains["labels"], dtype=torch.float16)) # TODO: This will be very memory intensive.
+    trainset = TensorDataset(torch.tensor(trains["features"], dtype=torch.float32), torch.tensor(trains["labels"], dtype=torch.float32)) # TODO: This will be very memory intensive.
     trains, testset = random_split(trainset, [0.8, 0.2])
-    print("Dataset prepared with_format('torch') >>", trains)
+    #print("Dataset prepared with_format('torch') >>", trains)
 
     # partition the data -- courtesy: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
@@ -111,7 +131,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
 
         trainsets_per_client = [Subset(trainset, idxs) for idxs in idx_clients]
         return DataLoader(trainsets_per_client[partition_id], batch_size=batch_size, shuffle=True, num_workers=4), DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
-    elif partitioning == "iid": 
+    elif partitioning == "iid":  # sim_iid_non_iid -> dirichl_iid_non_iid
         similarity = 0.6
         trainsets_per_client = []
 
@@ -140,15 +160,17 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             tmp_t = np.array(tmp_t)
         if isinstance(tmp_t, torch.Tensor):
             tmp_t = tmp_t.numpy()
-        targets = tmp_t[rem_trainset.indices,1].flatten()
-        num_remaining_classes = len(set(targets))
-        remaining_classes = list(set(targets))
-        print(num_remaining_classes)
-        print(remaining_classes)
-        client_classes: List[List] = [[] for _ in range(num_partitions)]
-        times = [0 for _ in range(num_remaining_classes)]
 
-        for i in range(num_partitions):
+        targets = tmp_t[rem_trainset.indices,1].flatten() # shape: 1d (N,)
+        bins = pd.cut(targets, [10, 20, 30, 40, 50, 60, 70, 80])
+        remaining_classes = list(set(bins))
+        remaining_classes.remove(np.nan)
+        num_remaining_classes = len(remaining_classes) # should be 7 ... 10-20, 20-30, ... 70-80 (7 age groups)
+
+        client_classes: List[List] = [[] for _ in range(num_partitions)]
+        times = np.zeros(num_remaining_classes)
+
+        for i in range(num_partitions): # partition = client
             client_classes[i] = [remaining_classes[i % num_remaining_classes]]
             times[i % num_remaining_classes] += 1
             j = 1
@@ -162,15 +184,19 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
 
         rem_trainsets_per_client: List[List] = [[] for _ in range(num_partitions)]
 
-        for i in range(num_remaining_classes):
+        for i in range(num_remaining_classes): # data partition not the same as 
             class_t = remaining_classes[i]
-            idx_k = np.where(targets == i)[0]
+            idx_k = [] # this is supposed to be indices, so taking i through enumerate(targets)
+            for j, label in enumerate(targets):
+                if label in class_t:
+                    idx_k.append(j)
+            print(times)
             prng.shuffle(idx_k)
             idx_k_split = np.array_split(idx_k, times[i])
             ids = 0
             for j in range(num_partitions):
                 if class_t in client_classes[j]:
-                    act_idx = rem_trainset.indices[idx_k_split[ids]]
+                    act_idx = rem_trainset.indices[idx_k_split[ids]]             #############################################
                     rem_trainsets_per_client[j].append(
                         Subset(rem_trainset.dataset, act_idx)
                     )

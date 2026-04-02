@@ -6,7 +6,7 @@ from tqdm import tqdm
 import h5py
 import pandas as pd
 import matplotlib.pyplot as plt
-import glob
+import glob, argparse
 from torch.utils.data import TensorDataset, random_split, DataLoader, ConcatDataset
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -133,7 +133,7 @@ def eval_loop(epoch, chunk, dataloader, model, loss_function, device):
 # ========================= Training PROCEDURE ============================#
 # =========================================================================#
 
-def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
+def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=256, id_=int(random.uniform(127962, 236777))):
     ddp_setup()
     gpu_id = int(os.environ["LOCAL_RANK"])
     # =============== Define model ============================================#
@@ -147,12 +147,9 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
     # model = CustomCNN()
     tqdm.write("Done!\n")
     
-    learning_rate = 1e-3
-    weight_decay = 0.1
     num_epochs = num_rounds # 10
-    batch_size = 256
 
-    pos_weight = torch.tensor([48], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
+    pos_weight = torch.tensor([49], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
     
     # =============== Define loss function ====================================#
     loss_function = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -368,4 +365,14 @@ def main(num_rounds, num_chunks, id_=int(random.uniform(127962, 236777))):
     # =======================================================================#
 
 if __name__ == "__main__":
-    main(num_rounds=8, num_chunks=-1, id_=int(random.uniform(1209310, 2230240)))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-lr", "--learning_rate", type=float, default=1e-4)
+    parser.add_argument("-wd", "--weight_decay", type=float, default=0.01)
+    parser.add_argument("-bs", "--batch_size", type=int, default=256)
+    parser.add_argument("-ep", "--epochs", type=int, default=10)
+    args = parser.parse_args()
+    main(num_rounds=args.epochs, num_chunks=-1, 
+        learning_rate=args.learning_rate, 
+        weight_decay=args.weight_decay, 
+        batch_size=args.batch_size, 
+        id_=int(random.uniform(1209310, 2230240)))
