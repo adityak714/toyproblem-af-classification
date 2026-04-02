@@ -32,58 +32,13 @@ learning-rate = 0.0001
 batch-size = 512
 partitioning = "iid"
 
+[superlink]
+default = "local-custom"
 
-#######################################################################
-# CONFIGURATION MIGRATION NOTICE:
-#
-# What was previously called "federation config" for SuperLink
-# connections in pyproject.toml has been renamed and moved.
-#
-# These settings are now **SuperLink connection configuration**
-# and are defined in the Flower configuration file.
-#
-# The entries below are commented out intentionally and are kept
-# only as a migration reference.
-#
-# Docs: https://flower.ai/docs/framework/ref-flower-configuration.html
-#######################################################################
+[superlink.local]
+options.num-supernodes = 10
 
-
-#######################################################################
-# CONFIGURATION MIGRATION NOTICE:
-#
-# What was previously called "federation config" for SuperLink
-# connections in pyproject.toml has been renamed and moved.
-#
-# These settings are now **SuperLink connection configuration**
-# and are defined in the Flower configuration file.
-#
-# The entries below are commented out intentionally and are kept
-# only as a migration reference.
-#
-# Docs: https://flower.ai/docs/framework/ref-flower-configuration.html
-#######################################################################
-
-
-#######################################################################
-# CONFIGURATION MIGRATION NOTICE:
-#
-# What was previously called "federation config" for SuperLink
-# connections in pyproject.toml has been renamed and moved.
-#
-# These settings are now **SuperLink connection configuration**
-# and are defined in the Flower configuration file.
-#
-# The entries below are commented out intentionally and are kept
-# only as a migration reference.
-#
-# Docs: https://flower.ai/docs/framework/ref-flower-configuration.html
-#######################################################################
-
-# [tool.flwr.federations]
-# default = "local"
-
-# [tool.flwr.federations.local]
-# options.num-supernodes = 2
-# options.backend.client-resources.num-cpus = 32
-# options.backend.client-resources.num-gpus = 0.5
+[superlink.local-custom]
+options.num-supernodes = 5
+options.backend.client-resources.num-cpus = 8
+options.backend.client-resources.num-gpus = 0.2

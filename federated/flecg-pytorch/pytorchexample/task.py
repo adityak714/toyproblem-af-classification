@@ -190,13 +190,12 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             for j, label in enumerate(targets):
                 if label in class_t:
                     idx_k.append(j)
-            print(times)
             prng.shuffle(idx_k)
             idx_k_split = np.array_split(idx_k, times[i])
             ids = 0
             for j in range(num_partitions):
                 if class_t in client_classes[j]:
-                    act_idx = rem_trainset.indices[idx_k_split[ids]]             #############################################
+                    act_idx = rem_trainset.indices[idx_k_split[ids]]
                     rem_trainsets_per_client[j].append(
                         Subset(rem_trainset.dataset, act_idx)
                     )
@@ -221,7 +220,7 @@ def train_fedavg(
     epochs: int,
     learning_rate: float,
     momentum=0,
-    weight_decay=0,
+    weight_decay=0.01,
     device=torch.device("cuda:0"),
 ) -> None:
     # pylint: disable=too-many-arguments
@@ -259,7 +258,7 @@ def _train_one_epoch(
         traces, diagnoses = traces.to(rank), diagnoses.to(rank)
         for x, y in trainloader:
             assert not isinstance(x, str), "FAULTY DATALOADER ... Check your data loading."
-            x, y = x.to(rank), y.to(rank)
+            x, y = x.to(rank), y[:,0].reshape(-1,1).to(rank)
             pred = net(x)
             curr_loss = criterion(pred, y)
             curr_loss.backward()
