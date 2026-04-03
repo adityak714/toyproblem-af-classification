@@ -220,6 +220,7 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
     counter = 0
 
     size = len(train_files_list) if num_chunks == -1 else num_chunks
+    snapshot_path = f"runs_centralized/{id_}-snapshot.pt"
 
     # loop over epochs
     for epoch in tqdm(range(1, num_epochs + 1)):
@@ -256,7 +257,7 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
                 tloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset, shuffle=True))
             
                 # training loop
-                train_loss = train_loop(epoch, filepath.replace("data/code15-12l/", ""), tloader, model, optimizer, loss_function, device=gpu_id, snapshot_path=f"{id_}-snapshot.pt")
+                train_loss = train_loop(epoch, filepath.replace("data/code15-12l/", ""), tloader, model, optimizer, loss_function, device=gpu_id, snapshot_path=snapshot_path)
 
                 # validation loop
                 yt, ypred, valid_loss, avg_precisions, avg_roc_aucs = eval_loop(
@@ -275,20 +276,24 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
 
                 # save checkpoints between epochs
                 if gpu_id == 0:
-                    _save_snap(model, epoch, snapshot_path=f"{id_}-snapshot.pt")
+                    _save_snap(
+                        model, 
+                        epoch, 
+                        snapshot_path=snapshot_path
+                    )
                     pd.DataFrame({
                         "epoch": np.arange(counter+1), 
                         "train_loss": train_loss_all, 
                         "valid_loss": valid_loss_all, 
                         "mAP": avgpreclist, 
                         "ROC/AUC": rocauclist
-                    }).to_csv(f"{id_}-results-partwise-lr{learning_rate}-ep{num_epochs}-exams{size-4}.csv", index=False)
+                    }).to_csv(f"runs_centralized/{id_}-results-partwise-lr{learning_rate}-ep{num_epochs}-exams{size-4}.csv", index=False)
         
                     # =============== PLOTTING  =============================================#
                     PrecisionRecallDisplay.from_predictions(yt, ypred) 
                     #precision, recall, thresholds = precision_recall_curve(yt, ypred)
                     #ax.fill_between() ----> uncertainties
-                    plt.savefig(f"{id_}-pr_curve-partwise.png", dpi=300)
+                    plt.savefig(f"runs_centralized/{id_}-pr_curve-partwise.png", dpi=300)
                     plt.close()
                     
                     fig2 = plt.figure(figsize=(8,6), dpi=300)
@@ -300,11 +305,11 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
                     ax2.plot(np.arange(counter+1), valid_loss_all, color="orange", label="Validation")
                     ax2.legend(loc="best")
                     fig2.tight_layout()
-                    fig2.savefig(f"{id_}-losses-partwise-centralizedcode15.png")
+                    fig2.savefig(f"runs_centralized/{id_}-losses-partwise-centralizedcode15.png")
                     plt.close()
         
                     RocCurveDisplay.from_predictions(yt, ypred)
-                    plt.savefig(f"{id_}-roc_curve-partwise.png", dpi=300)
+                    plt.savefig(f"runs_centralized/{id_}-roc_curve-partwise.png", dpi=300)
                     plt.close()
                 
                     fig = plt.figure(figsize=(8,6), dpi=300)
@@ -316,13 +321,13 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
                     ax.plot(np.arange(counter+1), rocauclist, color="orange", label="ROC/AUC")
                     ax.legend(loc="best")
                     fig.tight_layout()
-                    fig.savefig(f"{id_}-pr+roc_aucs-partwise-centralizedcode15.png") 
+                    fig.savefig(f"runs_centralized/{id_}-pr+roc_aucs-partwise-centralizedcode15.png") 
                     plt.close()
             
                     # save best model: here we save the model only for the lowest validation loss
                     if valid_loss < best_loss:
                         # Save model parameters
-                        torch.save({'model': model.state_dict()}, f'{id_}-resnetmodel-centralizedcode15-partwise.pth')
+                        torch.save({'model': model.state_dict()}, f'runs_centralized/{id_}-resnetmodel-centralizedcode15-partwise.pt')
                         # Update best validation loss
                         best_loss = valid_loss        
 
@@ -355,7 +360,7 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
             ax2.plot(np.arange(counter), lrs, color="blue")
             ax2.grid(True)
             fig2.tight_layout()
-            fig2.savefig(f"{id_}-lrscheduling-centralizedcode15.png")
+            fig2.savefig(f"runs_centralized/{id_}-lrscheduling-centralizedcode15.png")
             plt.close()
             lr_scheduler.step(avgpreclist[-1])
         #if lrs[-1] < 1e-8:
