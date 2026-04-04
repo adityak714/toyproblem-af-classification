@@ -2,3 +2,5 @@
 __pycache__/
 ecg-preprocessing/
 data/
+.venv/
+venv/

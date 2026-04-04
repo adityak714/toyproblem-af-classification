@@ -1,0 +1,61 @@
+---
+# @package _global_
+# this is the config that will be loaded as default by main.py
+# Please follow the provided structure (this will ensuring all baseline follow
+# a similar configuration structure and hence be easy to customise)
+
+num_clients: 2 # 10
+num_epochs: 1
+batch_size: 64
+clients_per_round: 1
+learning_rate: 0.0001
+num_rounds: 5 # 50
+partitioning: "iid"
+similarity: 1.0
+dataset_name: "code15"
+dataset_seed: 42
+alpha: 0.5 # only if you specify {partitioning = "dirichlet"} above!
+labels_per_client: 2 # only used when partitioning is label quantity
+momentum: 0
+weight_decay: 0.00001
+
+client_fn:
+  _target_: niid_bench.run_fedavg.gen_client_fn
+  _recursive_: False
+  num_epochs: ${num_epochs}
+  learning_rate: ${learning_rate}
+  momentum: ${momentum}
+  weight_decay: ${weight_decay}
+
+dataset:
+  # dataset config
+  name: ${dataset_name}
+  partitioning: ${partitioning}
+  batch_size: ${batch_size} # batch_size = batch_size_ratio * total_local_data_size
+  val_split: 0.3
+  seed: ${dataset_seed}
+  alpha: ${alpha}
+  labels_per_client: ${labels_per_client}
+
+model:
+  # model config
+  _target_: niid_bench.models.ResNet1d
+  n_classes: 1
+
+strategy:
+  _target_: flwr.server.strategy.FedAvg # points to your strategy (either custom or exiting in Flower)
+  # rest of strategy config
+  fraction_fit: 0.00001 # because we want the number of clients to sample on each round to be solely defined by min_fit_clients
+  fraction_evaluate: 0.0
+  min_fit_clients: ${clients_per_round}
+  min_available_clients: ${clients_per_round}
+  min_evaluate_clients: 1
+
+client:
+  # client config
+
+server_device: cuda
+
+client_resources:
+  num_cpus: 64
+  num_gpus: 4
