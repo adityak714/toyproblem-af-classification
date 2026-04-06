@@ -39,6 +39,6 @@ default = "local-custom"
 options.num-supernodes = 2
 
 [superlink.local-custom]
-options.num-supernodes = 5
+options.num-supernodes = 2
 options.backend.client-resources.num-cpus = 8
-options.backend.client-resources.num-gpus = 0.2
+options.backend.client-resources.num-gpus = 4.0

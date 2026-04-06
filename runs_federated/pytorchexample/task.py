@@ -4,7 +4,7 @@ from typing import List, Tuple
 from sklearn.metrics import average_precision_score
 import numpy as np
 import pandas as pd
-import torch, h5py, glob, time, argparse
+import torch, h5py, glob, time, argparse, os
 import torch.nn as nn
 import torch.nn.functional as F
 from datasets import Dataset
@@ -46,7 +46,7 @@ for i in range(4):
 def load_centralized_dataset():
     """Load entire test set (selected to be exams_part0, exams_part1, 2 and 3) and return the dataloader."""
     vloaders = []
-    device = torch.device("cuda")
+    device = torch.device("cuda:0")
 
     for i, filepath in enumerate(sorted(glob.glob("../data/code15-12l/*.hdf5"))):
         # build data loaders
@@ -54,7 +54,9 @@ def load_centralized_dataset():
             path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv'
             # load traces
             f = h5py.File(path_to_h5_train, 'r')
-            traces = torch.tensor(np.array(f['tracings'], dtype=np.float32), dtype=torch.float32, device=device)[:-1,:,:]
+            traces = torch.tensor(np.array(f['tracings'], dtype=np.float32), dtype=torch.float32, 
+                                  #device=device
+                                 )[:-1,:,:]
             # load labels
             ids_traces = np.array(f['exam_id'])
             df = pd.read_csv(path_to_csv_train)
@@ -63,11 +65,10 @@ def load_centralized_dataset():
             df = df.set_index('exam_id')
             df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
             labels = torch.tensor(
-                np.array(df['AF'], dtype=np.float16), 
-                dtype=torch.float16,
-                device=device
+                np.array(df['AF'], dtype=np.float32), 
+                dtype=torch.float32,
+                #device=device
             ).reshape(-1,1)
-            print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1]), "-->> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1])) 
             
             # load dataset
             dataset = TensorDataset(traces, labels)
@@ -97,7 +98,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
 
         # load traces
         f = h5py.File(path_to_h5_train, 'r')
-        traces = torch.tensor(np.array(f['tracings'][()], dtype=np.float16), dtype=torch.float16, device=device)[:-1,:,:]
+        traces = torch.tensor(np.array(f['tracings'][()], dtype=np.float32), dtype=torch.float32, device=device)[:-1,:,:]
         print("traces successfully converted to tensors ...")
 
         # load labels
@@ -105,7 +106,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         df = df.set_index('exam_id')
         df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
         
-        labels = np.array(df[['AF', 'age']], dtype=np.float16).reshape(-1,2) 
+        labels = np.array(df[['AF', 'age']], dtype=np.float32).reshape(-1,2) 
         
         if len(trains["features"]) > 0:
             trains["features"] = np.vstack((trains["features"], traces.detach().cpu()))
@@ -116,8 +117,8 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             trains["labels"] = labels
 
     trainset = TensorDataset(
-        torch.tensor(trains["features"], dtype=torch.float32, device=device),
-        torch.tensor(trains["labels"], dtype=torch.float16)
+        torch.tensor(trains["features"], dtype=torch.float32),
+        torch.tensor(trains["labels"], dtype=torch.float32)
     )
     trains, testset = random_split(trainset, [0.8, 0.2])
 
@@ -195,7 +196,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             sampler=DistributedSampler(testset)
         )
     elif partitioning == "iid":  # sim_iid_non_iid -> dirichl_iid_non_iid
-        similarity = 0.8
+        similarity = 0.5
         trainsets_per_client = []
 
         # for s% similarity sample iid data per client
@@ -323,6 +324,10 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
 def train_fedavg(
     net,
     trainloader: DataLoader,
+    #partition_id,
+    #num_clients,
+    #batch_size,
+    #partitioning,
     epochs: int,
     learning_rate: float,
     momentum=0,
@@ -331,15 +336,13 @@ def train_fedavg(
 ) -> None:
     # pylint: disable=too-many-arguments
     """Train the network on the training set using FedAvg."""
-    
+    # -- START MULTIGPU PROCESS -- 
+    ddp_setup()
     model = ResNet1d(n_classes=1)
     if os.path.exists(snapshot_path):
         print("Loading snapshot...client")
-        _load_snap(model, device, snapshot_path)
-    else:
-        net = 
+        _load_snap(model, device, net) # -- net >> output-client{partition_id}.pt
 
-    ddp_setup()
     device = int(os.environ["LOCAL_RANK"])
     print("Training >>", epochs, learning_rate)
 
@@ -347,14 +350,18 @@ def train_fedavg(
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=weight_decay) #,weight_decay=weight_decay)
 
-    net = torch.nn.SyncBatchNorm.convert_sync_batchnorm(net)
-    net.to(device)
-    net = DDP(net, device_ids=[device])
-
+    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    model.to(device)
+    model = DDP(model, device_ids=[device])
+    
     loss = 0
     for i in range(epochs):
-        loss, net = _train_one_epoch(net, device, trainloader, criterion, optimizer, i)
+        loss = _train_one_epoch(model, device, trainloader, criterion, optimizer, i)
+        if device == 0:
+            _save_snap(model, i, snapshot_path=net)
+            # TODO: LOG THE LOSS FOUND ABOVE ^^
 
+    # -- END MULTIGPU PROCESS --
     destroy_process_group()
     return loss
 
@@ -391,7 +398,7 @@ def _train_one_epoch(
         train_pbar.set_postfix({'loss': total_loss / n_entries})
     train_pbar.close()
 
-    return float(total_loss/n_entries), net
+    return float(total_loss/n_entries)
 
 # def test(net, testloader, device):
 def test(net, testloader: DataLoader, device) -> Tuple[float, float]: # == rank >> before: torch.device, # world_size=torch.cuda.device_count(): int
@@ -424,11 +431,9 @@ def test(net, testloader: DataLoader, device) -> Tuple[float, float]: # == rank 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-
     parser.add_argument("-id", "--partition_id", type=int)
     parser.add_argument("-c", "--num_clients", type=int)
     parser.add_argument("-p", "--partitioning", type=str, default="dirichlet")
-
     parser.add_argument("-m", "--model_path", type=str) # "model.pt"
     parser.add_argument("-bs", "--batch_size", type=int, default=256)
     parser.add_argument("-lr", "--learning_rate", type=float, default=1e-4)
@@ -440,11 +445,16 @@ if __name__ == "__main__":
         args.partition_id, 
         args.num_clients, 
         args.batch_size, 
-        partitioning=args.partitioning
+        args.partitioning
     )
+    
     train_fedavg(
         args.model_path,
         trainloader,
+        #args.partition_id, 
+        #args.num_clients, 
+        #args.batch_size, 
+        #args.partitioning,
         args.epochs,
         args.learning_rate,
     )
