@@ -10,43 +10,56 @@ from pytorchexample.task import train_fedavg as train_fn
 
 # Flower ClientApp
 app = ClientApp()
-trainloader, valloader = [], []
+# trainloader, valloader = [], []
 
 @app.train()
 def train(msg: Message, context: Context):
     """Train the model on local data."""
-    # Load the necessary args
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    batch_size = context.run_config["batch-size"]
-    partitioning = context.run_config["partitioning"]
-    learning_rate = msg.content["config"]["lr"]
-    local_epochs = context.run_config["local-epochs"]
-    
     # Load the model and initialize it with the received weights
     #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
-    model_path = f"output-client{partition_id}.pt"
+    model_path = f"output-client{context.node_config["partition-id"]}.pt"
     partition_model = {"MODEL_STATE": msg.content["arrays"].to_torch_state_dict()}
     torch.save(partition_model, model_path)
 
+    model = ResNet1d(n_classes=1)
+    model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # model = ray.train.torch.prepare_model(model) # model.to(device) #######################
+
     # Call the training function
     start_time = time.time()
-    
-    with open(f"output-client{partition_id}.txt", "w") as f:
-        train_loss = subprocess.run(
-            f'torchrun --standalone --nproc_per_node=4 pytorchexample/task.py --model_path {model_path} --num_clients {num_partitions} --partition_id {partition_id} --batch_size {batch_size} --epochs {local_epochs} --learning_rate {learning_rate}'.split(),
-            stdout=f,
-            text=True
-        )
+    #scaling_config = ray.train.ScalingConfig(num_workers=2, use_gpu=True)
+    # trainer = ray.train.torch.TorchTrainer(
+    #     train_fn,
+    #     scaling_config=scaling_config,
+    #     train_loop_config={
+    #         "net": model,
+    #         "partition_id": context.node_config["partition-id"],
+    #         "num_partitions": context.node_config["num-partitions"],
+    #         "partitioning": context.run_config["partitioning"],
+    #         "num_epochs": context.run_config["local-epochs"], 
+    #         "lr": msg.content["config"]["lr"], 
+    #         "batch_size": context.run_config["batch-size"]
+    #     }
+    # )
+    train_loss, model, train_data_size = train_fn({
+        "net": model,
+        "partition_id": context.node_config["partition-id"],
+        "num_partitions": context.node_config["num-partitions"],
+        "partitioning": context.run_config["partitioning"],
+        "epochs": context.run_config["local-epochs"], 
+        "lr": msg.content["config"]["lr"], 
+        "batch_size": context.run_config["batch-size"]
+    })
     
     end_time = time.time()
     training_time = end_time - start_time
 
     # Construct and return reply Message
-    model_record = ArrayRecord(torch.load(model_path)["MODEL_STATE"])
+    model_record = ArrayRecord(model.state_dict())
     metrics = {
-        "train_loss": train_loss.returncode,
-        "num-examples": len(trainloader),
+        "train_loss": train_loss,
+        "num-examples": train_data_size,
         "training_time": training_time
     }
     metric_record = MetricRecord(metrics)
