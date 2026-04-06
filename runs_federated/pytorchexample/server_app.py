@@ -1,10 +1,10 @@
 """pytorchexample: A Flower / PyTorch app."""
 
-import torch
+import torch, uuid, json
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
-
+from datetime import date
 from pytorchexample.task import ResNet1d, load_centralized_dataset, load_datasets, test
 
 # Create ServerApp
@@ -35,11 +35,15 @@ def main(grid: Grid, context: Context) -> None:
         num_rounds=num_rounds,
         evaluate_fn=global_evaluate,
     )
+    today = date.today()
+    unique_id = str(uuid.uuid4())
+    with open(f'runs_federated/{today}-{unique_id}-metrics.json', 'w') as f:
+        json.dump(result, f)
 
     # Save final model to disk
     print("\nSaving final model to disk...")
     state_dict = result.arrays.to_torch_state_dict()
-    torch.save(state_dict, "final_model.pt")
+    torch.save(state_dict, f"runs_federated/{today}-{unique_id}-final_model.pt")
 
 
 def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:

@@ -1,6 +1,6 @@
 """pytorchexample: A Flower / PyTorch app."""
 
-import torch, time, subprocess
+import torch, time
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
@@ -10,7 +10,6 @@ from pytorchexample.task import train_fedavg as train_fn
 
 # Flower ClientApp
 app = ClientApp()
-# trainloader, valloader = [], []
 
 @app.train()
 def train(msg: Message, context: Context):
@@ -23,25 +22,9 @@ def train(msg: Message, context: Context):
 
     model = ResNet1d(n_classes=1)
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
-    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # model = ray.train.torch.prepare_model(model) # model.to(device) #######################
 
     # Call the training function
     start_time = time.time()
-    #scaling_config = ray.train.ScalingConfig(num_workers=2, use_gpu=True)
-    # trainer = ray.train.torch.TorchTrainer(
-    #     train_fn,
-    #     scaling_config=scaling_config,
-    #     train_loop_config={
-    #         "net": model,
-    #         "partition_id": context.node_config["partition-id"],
-    #         "num_partitions": context.node_config["num-partitions"],
-    #         "partitioning": context.run_config["partitioning"],
-    #         "num_epochs": context.run_config["local-epochs"], 
-    #         "lr": msg.content["config"]["lr"], 
-    #         "batch_size": context.run_config["batch-size"]
-    #     }
-    # )
     train_loss, model, train_data_size = train_fn({
         "net": model,
         "partition_id": context.node_config["partition-id"],
@@ -51,8 +34,8 @@ def train(msg: Message, context: Context):
         "lr": msg.content["config"]["lr"], 
         "batch_size": context.run_config["batch-size"]
     })
-    
     end_time = time.time()
+
     training_time = end_time - start_time
 
     # Construct and return reply Message

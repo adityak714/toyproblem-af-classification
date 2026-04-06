@@ -74,7 +74,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         if file_.replace("data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
             train_list.remove(file_)
 
-    for i, filepath in enumerate(train_list[:2]):
+    for i, filepath in enumerate(train_list):
         path_to_h5_train, path_to_csv_train = filepath, 'data/code15-12l/exams.csv' 
         #print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
 
@@ -99,8 +99,8 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             trains["labels"] = labels
 
     trainset = TensorDataset(
-        torch.tensor(trains["features"], dtype=torch.float32, device=device),
-        torch.tensor(trains["labels"], dtype=torch.float32, device=device)
+        torch.tensor(trains["features"], dtype=torch.float32),
+        torch.tensor(trains["labels"], dtype=torch.float32)
     )
     trains, testset = random_split(trainset, [0.8, 0.2])
 
