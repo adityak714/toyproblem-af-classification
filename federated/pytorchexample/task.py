@@ -24,7 +24,7 @@ def load_centralized_dataset():
     vloaders = []
     device = torch.device("cuda:0")
 
-    for i, filepath in enumerate(sorted(glob.glob("../data/code15-12l/*.hdf5"))):
+    for i, filepath in enumerate(sorted(glob.glob("../data/code15-12l/*.hdf5"))[:5]):
         # build data loaders
         if filepath.replace("../data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
             path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv'

@@ -37,13 +37,13 @@ def main(grid: Grid, context: Context) -> None:
     )
     today = date.today()
     unique_id = str(uuid.uuid4())
-    with open(f'runs_federated/{today}-{unique_id}-metrics.json', 'w') as f:
+    with open(f'{today}-{unique_id}-metrics.json', 'w') as f:
         json.dump(result, f)
 
     # Save final model to disk
     print("\nSaving final model to disk...")
     state_dict = result.arrays.to_torch_state_dict()
-    torch.save(state_dict, f"runs_federated/{today}-{unique_id}-final_model.pt")
+    torch.save(state_dict, f"{today}-{unique_id}-final_model.pt")
 
 
 def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:

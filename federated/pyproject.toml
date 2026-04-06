@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "runs_federated"
+name = "federated"
 description = "FLECG"
 version = "1.0.1"
 license = "Apache-2.0"
@@ -36,5 +36,5 @@ partitioning = "dirichlet"
 default = "local-custom"
 
 [superlink.local-custom]
-options.backend.client-resources.num-cpus = 32
-options.backend.client-resources.num-gpus = 3.0
+options.backend.client-resources.num-cpus = 8
+options.backend.client-resources.num-gpus = 2.0
