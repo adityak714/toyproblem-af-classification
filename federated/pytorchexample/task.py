@@ -23,8 +23,8 @@ def load_centralized_dataset():
     """Load entire test set (selected to be exams_part0, exams_part1, 2 and 3) and return the dataloader."""
     vloaders = []
     device = torch.device("cuda:0")
-
-    for i, filepath in enumerate(sorted(glob.glob("../data/code15-12l/*.hdf5"))[:5]):
+    
+    for i, filepath in enumerate(sorted(glob.glob("../data/code15-12l/*.hdf5"))):
         # build data loaders
         if filepath.replace("../data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
             path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv'
@@ -61,8 +61,7 @@ def load_centralized_dataset():
 # def load_data(partition_id: int, num_partitions: int, batch_size: int):
 def load_datasets(partition_id: int, num_partitions: int, batch_size: int, partitioning: str = "iid", device: torch.device = torch.device("cpu"), seed: Optional[int] = 42) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     trainloaders, testloader = [], []
-    train_list = sorted(glob.glob("data/code15-12l/*.hdf5"))
-    print(train_list)
+    train_list = sorted(glob.glob("../data/code15-12l/*.hdf5"))
     #print("Loading hdf5 ...", torch.cuda.device_count())
     trains = {
         "features": [],
@@ -71,11 +70,13 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
     #device = torch.device("cuda")
     #print(os.getcwd())
     for file_ in train_list:
-        if file_.replace("data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
+        if file_.replace("../data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
             train_list.remove(file_)
 
+    print(train_list)
+    
     for i, filepath in enumerate(train_list):
-        path_to_h5_train, path_to_csv_train = filepath, 'data/code15-12l/exams.csv' 
+        path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv' 
         #print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
 
         # load traces
@@ -106,13 +107,14 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
 
     # partition the data -- courtesy: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
-        alpha = 1.0
+        alpha = 10.0
         min_required_samples_per_client = 1000
 
         prng = np.random.default_rng(seed)
 
         # get the targets
         tmp_t = [y.cpu() for x,y in trains.dataset] # rem_trainset.dataset.targets
+
         if isinstance(tmp_t, list):
             tmp_t = np.array(tmp_t)
         if isinstance(tmp_t, torch.Tensor):

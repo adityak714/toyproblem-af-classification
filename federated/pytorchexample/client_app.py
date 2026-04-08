@@ -7,6 +7,7 @@ from flwr.clientapp import ClientApp
 from pytorchexample.task import ResNet1d, load_datasets
 from pytorchexample.task import test as test_fn
 from pytorchexample.task import train_fedavg as train_fn
+from datetime import date
 
 # Flower ClientApp
 app = ClientApp()
@@ -43,10 +44,17 @@ def train(msg: Message, context: Context):
     metrics = {
         "train_loss": train_loss,
         "num-examples": train_data_size,
-        "training_time": training_time
+        "training_time": training_time,
+        "local-epochs": context.run_config["local-epochs"],
+        "partition_id": context.node_config["partition-id"]
     }
     metric_record = MetricRecord(metrics)
     content = RecordDict({"arrays": model_record, "metrics": metric_record})
+    today = date.today()
+
+    with open(f'{today}-clients{context.node_config["num-partitions"]}-partitioning{context.run_config["partitioning"]}-commrounds{context.run_config["num-server-rounds"]}-loceps{context.run_config["local-epochs"]}.txt', "a") as logger:
+        logger.write(f"{str(dict(metric_record))}\n")
+
     return Message(content=content, reply_to=msg)
 
 @app.evaluate()

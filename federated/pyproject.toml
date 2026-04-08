@@ -25,7 +25,7 @@ serverapp = "pytorchexample.server_app:app"
 clientapp = "pytorchexample.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 1
+num-server-rounds = 5
 fraction-evaluate = 0.5
 local-epochs = 1
 learning-rate = 0.0001
@@ -36,5 +36,5 @@ partitioning = "dirichlet"
 default = "local-custom"
 
 [superlink.local-custom]
-options.backend.client-resources.num-cpus = 8
+options.backend.client-resources.num-cpus = 10
 options.backend.client-resources.num-gpus = 2.0

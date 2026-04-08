@@ -38,7 +38,7 @@ def main(grid: Grid, context: Context) -> None:
     today = date.today()
     unique_id = str(uuid.uuid4())
     with open(f'{today}-{unique_id}-metrics.json', 'w') as f:
-        json.dump(result, f)
+        json.dump(dict(result), f)
 
     # Save final model to disk
     print("\nSaving final model to disk...")
