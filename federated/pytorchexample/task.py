@@ -107,7 +107,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
 
     # partition the data -- courtesy: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
-        alpha = 10.0
+        alpha = 25.0
         min_required_samples_per_client = 1000
 
         prng = np.random.default_rng(seed)

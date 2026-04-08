@@ -59,8 +59,8 @@ source venv/bin/activate
 
 ```bash
 # -- dashboard can be viewed as a webpage at localhost:8265 given ray[default] is installed by pip
-ray start --include-dashboard --head --temp-dir=$HOME/storage
-ray start --address="10.21.30.<>:6379"
+ray start --include-dashboard --head --temp-dir=$HOME/storage # start in the federated/ directory.
+ray start --address="10.21.30.<>:6379" # this should be in the same dir as where the HEAD ray session was started.
 ln -s $HOME/.flwr/config.toml 1-starter-ecg-model/federated/config.toml
 cat pyproject.toml # project-local .toml file, where contextual config (num. local epochs, batch_size, partitioning_strategy, lr, communication rounds ...) & num_gpu and num_cpu
 cat config.toml # here the number of clients is controlled -- symlink to $HOME/.flwr/config.toml, if this is edited, that file also gets edited. 
@@ -75,7 +75,9 @@ flwr run # run this in the same dir as the toml files.
 ```
 
 > **Common errors: the data files not found.**
-> Ray may see the root dir to be where the Python virtual environment is. Flower Simulator (when running `flwr run ...`) may see the root dir as where the toml files are. In `1-starter-ecg-model/federated/pytorchexample`, the files for the server, client and the task are present. Modify the os path directory in `task.py` if no files get loaded. Inspect what the working directory is at the place where the data partitioning and loading happens, in `load_datasets()`, by printing `os.getcwd()` to the console.
+> Ray may see the root dir to be where the Python virtual environment is. When setting up the Ray nodes as well as the HEAD node, they all should be spawned while being in the directory `1-starter-ecg-model/federated/` (IMPORTANT!). 
+
+In `1-starter-ecg-model/federated/pytorchexample`, the files for the server, client and the task are present. Modify the os path directory in `task.py` if no files get loaded. Inspect what the working directory is at the place where the data partitioning and loading happens, in `load_datasets()`, by printing `os.getcwd()` to the console.
 
 ## Run the project
 
