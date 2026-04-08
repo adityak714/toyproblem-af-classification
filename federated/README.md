@@ -1,21 +1,18 @@
 ---
-tags: [quickstart, vision, fds]
-dataset: [CIFAR-10]
-framework: [torch, torchvision]
+tags: [ecg, af-classification, resnet]
+dataset: [CODE15]
+framework: [torch]
 ---
 
-# Federated Learning with PyTorch and Flower (Quickstart Example)
-
-This introductory example to Flower uses PyTorch, but deep knowledge of PyTorch is not necessarily required to run the example. However, it will help you understand how to adapt Flower to your use case. Running this example in itself is quite easy. This example uses [Flower Datasets](https://flower.ai/docs/datasets/) to download, partition and preprocess the CIFAR-10 dataset.
-
-## Set up the project
+# FL-ECG - Federated Learning for Automated ECG Classification with the CODE15% Dataset
 
 ### Fetch the app
 
-Install Flower:
+Install Flower (and Ray):
 
 ```shell
 pip install flwr
+pip install -U "ray[default]"
 ```
 
 Fetch the app:
@@ -44,6 +41,41 @@ Install the dependencies defined in `pyproject.toml` as well as the `pytorchexam
 ```bash
 pip install -e .
 ```
+
+Or download from the `requirements-final.txt` file.
+
+```bash
+pip install -r requirements-final.txt
+```
+
+## Set up + running the project
+
+```bash
+cd 1-starter-ecg-model/
+python3 -m venv venv
+pip install -r ../requirements-final.txt
+source venv/bin/activate
+```
+
+```bash
+# -- dashboard can be viewed as a webpage at localhost:8265 given ray[default] is installed by pip
+ray start --include-dashboard --head --temp-dir=$HOME/storage
+ray start --address="10.21.30.<>:6379"
+ln -s $HOME/.flwr/config.toml 1-starter-ecg-model/federated/config.toml
+cat pyproject.toml # project-local .toml file, where contextual config (num. local epochs, batch_size, partitioning_strategy, lr, communication rounds ...) & num_gpu and num_cpu
+cat config.toml # here the number of clients is controlled -- symlink to $HOME/.flwr/config.toml, if this is edited, that file also gets edited. 
+## Keep num_gpu and num_cpu same with pyproject.toml as a safety step to avoid inconsistent config loading.
+```
+
+Finally, run:
+
+```bash
+export RAY_ADDRESS="10.21.30.<>:6379" # this must point to the HEAD node of the Ray setup
+flwr run # run this in the same dir as the toml files.
+```
+
+> **Common errors: the data files not found.**
+> Ray may see the root dir to be where the Python virtual environment is. Flower Simulator (when running `flwr run ...`) may see the root dir as where the toml files are. In `1-starter-ecg-model/federated/pytorchexample`, the files for the server, client and the task are present. Modify the os path directory in `task.py` if no files get loaded. Inspect what the working directory is at the place where the data partitioning and loading happens, in `load_datasets()`, by printing `os.getcwd()` to the console.
 
 ## Run the project
 
