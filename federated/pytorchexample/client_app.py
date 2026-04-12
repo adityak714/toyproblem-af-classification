@@ -31,6 +31,7 @@ def train(msg: Message, context: Context):
         "partition_id": context.node_config["partition-id"],
         "num_partitions": context.node_config["num-partitions"],
         "partitioning": context.run_config["partitioning"],
+        "val": context.run_config["val"],
         "epochs": context.run_config["local-epochs"], 
         "lr": msg.content["config"]["lr"], 
         "batch_size": context.run_config["batch-size"]
@@ -64,7 +65,9 @@ def evaluate(msg: Message, context: Context):
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
     batch_size = context.run_config["batch-size"]
-    trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size)
+    partitioning = context.run_config["partitioning"]
+    val = context.run_config["val"]
+    trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size, partitioning=partitioning, val=val)
     
     # Load the model and initialize it with the received weights
     model = ResNet1d(n_classes=1)
@@ -84,4 +87,9 @@ def evaluate(msg: Message, context: Context):
     }
     metric_record = MetricRecord(metrics)
     content = RecordDict({"metrics": metric_record})
+    today = date.today()
+
+    with open(f'{today}-clients{context.node_config["num-partitions"]}-partitioning{context.run_config["partitioning"]}-commrounds{context.run_config["num-server-rounds"]}-loceps{context.run_config["local-epochs"]}.txt', "a") as logger:
+        logger.write(f"{str(dict(metric_record))}\n")
+
     return Message(content=content, reply_to=msg)

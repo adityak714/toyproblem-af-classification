@@ -59,7 +59,7 @@ def load_centralized_dataset():
     )
 
 # def load_data(partition_id: int, num_partitions: int, batch_size: int):
-def load_datasets(partition_id: int, num_partitions: int, batch_size: int, partitioning: str = "iid", device: torch.device = torch.device("cpu"), seed: Optional[int] = 42) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
+def load_datasets(partition_id: int, num_partitions: int, batch_size: int, partitioning: str = "iid", val: float = 1.0, device: torch.device = torch.device("cpu"), seed: Optional[int] = 42) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     trainloaders, testloader = [], []
     train_list = sorted(glob.glob("../data/code15-12l/*.hdf5"))
     #print("Loading hdf5 ...", torch.cuda.device_count())
@@ -103,17 +103,16 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         torch.tensor(trains["features"], dtype=torch.float32),
         torch.tensor(trains["labels"], dtype=torch.float32)
     )
-    trains, testset = random_split(trainset, [0.8, 0.2])
 
     # partition the data -- courtesy: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
-        alpha = 25.0
+        alpha = val
         min_required_samples_per_client = 1000
 
         prng = np.random.default_rng(seed)
 
         # get the targets
-        tmp_t = [y.cpu() for x,y in trains.dataset] # rem_trainset.dataset.targets
+        tmp_t = [item[1].cpu() for item in trainset] # rem_trainset.dataset.targets
 
         if isinstance(tmp_t, list):
             tmp_t = np.array(tmp_t)
@@ -152,12 +151,16 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
                 ]
                 min_samples = min([len(idx_j) for idx_j in idx_clients])
 
-        trainsets_per_client = [Subset(trainset, idxs) for idxs in idx_clients]
+        splits = [random_split(Subset(trainset, idxs), [0.8, 0.2]) for idxs in idx_clients]
+        trainsets_per_client = [set_[0] for set_ in splits]
+        testsets_per_client = [set_[1] for set_ in splits]
+
         ages = [[] for i in range(num_partitions)]
         for i in range(num_partitions):
             for x,y in trainsets_per_client[i]:
                 ages[i].append(y[1].cpu().numpy())
             ages[i] = np.array(ages[i]).flatten()
+
         import pickle
         with open(f'clients{num_partitions}-dirichl{alpha}.pkl', 'wb') as f:
             pickle.dump(ages, f)
@@ -168,12 +171,15 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             batch_size=batch_size, 
             shuffle=False
         ), DataLoader(
-            testset, 
+            testsets_per_client[partition_id], 
             batch_size=batch_size, 
             shuffle=False
         )
     elif partitioning == "iid":  # sim_iid_non_iid -> dirichl_iid_non_iid
-        similarity = 0.5
+        similarity = val
+        if similarity > 1.0 or similarity < 0.1:
+            raise ValueError("Invalid value", val, "for partitioning =", partitioning)
+
         trainsets_per_client = []
 
         # for s% similarity sample iid data per client
@@ -213,7 +219,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
                 shuffle=False
             )
 
-        tmp_t = [y for x,y in rem_trainset.dataset] # rem_trainset.dataset.targets
+        tmp_t = [item[1].cpu() for item in rem_trainset] # rem_trainset.dataset.targets
         if isinstance(tmp_t, list):
             tmp_t = np.array(tmp_t)
         if isinstance(tmp_t, torch.Tensor):
@@ -298,6 +304,7 @@ def train_fedavg(config) -> None:
     num_partitions = config["num_partitions"]
     batch_size = config["batch_size"]
     partitioning = config["partitioning"]
+    val = config["val"]
     epochs = config["epochs"]
     learning_rate = config["lr"]
     momentum = 0
@@ -314,10 +321,10 @@ def train_fedavg(config) -> None:
     # model.to(device)
     # model = DDP(model, device_ids=[device])
     count = 0
-    trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size, partitioning=partitioning, device=device)
+    trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size, partitioning=partitioning, val=val, device=device)
     for _ in enumerate(trainloader):
         count += 1
-    print("****** CLIENT: ", partition_id, "DATA SIZE:", count)
+    print("****** CLIENT: ", partition_id, "BATCH SIZE:", batch_size, "DATA SIZE:", count)
 
     loss = 0
     for i in range(epochs):
@@ -390,7 +397,7 @@ def test(net, testloader: DataLoader, device) -> Tuple[float, float]: # == rank 
 
     with torch.no_grad():
         for data, target in testloader:
-            assert not isinstance(data, str), "FAULTY DATALOADER ... Check your data loading."
+            #assert not isinstance(data, str), "FAULTY DATALOADER ... Check your data loading."
             data, target = data.to(device), target[:,0].reshape(-1,1).to(device)
             output = net(data)
             loss += criterion(output, target).item()
