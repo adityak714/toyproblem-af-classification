@@ -1,24 +1,35 @@
 """pytorchexample: A Flower / PyTorch app."""
 
-import torch, uuid, json
+import torch, os, uuid, json, glob, h5py, numpy as np, pandas as pd
+from matplotlib import pyplot as plt
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
 from datetime import date
 from pytorchexample.task import ResNet1d, load_centralized_dataset, load_datasets, test
+from sklearn.metrics import average_precision_score, PrecisionRecallDisplay
 
 # Create ServerApp
 app = ServerApp()
-
+today = date.today()
+unique_id = str(uuid.uuid4())
 
 @app.main()
 def main(grid: Grid, context: Context) -> None:
     """Main entry point for the ServerApp."""
-
     # Read run config
     fraction_evaluate: float = context.run_config["fraction-evaluate"]
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["learning-rate"]
+    
+    os.environ["CURR_FLWR_SESSION_ID"] = unique_id
+    with open("tmp.txt", 'w') as f:
+        print("CURR_FLWR_SESSION_ID set as", os.environ["CURR_FLWR_SESSION_ID"])
+        filetree = f"./runs/{today}-{unique_id}"
+        f.write(filetree)
+
+    if not os.path.isdir(filetree):
+        os.makedirs(filetree, exist_ok=True)
 
     # Load global model
     global_model = ResNet1d(n_classes=1)
@@ -26,25 +37,32 @@ def main(grid: Grid, context: Context) -> None:
 
     # Initialize FedAvg strategy
     strategy = FedAvg(fraction_evaluate=fraction_evaluate)
+     
+    try:
+        # Start strategy, run FedAvg for `num_rounds`
+        result = strategy.start(
+            grid=grid,
+            initial_arrays=arrays,
+            train_config=ConfigRecord({"lr": lr}),
+            num_rounds=num_rounds,
+            evaluate_fn=global_evaluate,
+        )
+    except KeyboardInterrupt as stopped_session:
+        with open(f'runs/{today}-{unique_id}/server-finished_metrics.txt', 'w') as f:
+            f.write(str(dict(result.evaluate_metrics_serverapp)))
+        # Save final model to disk
+        print("\nSaving final model to disk...")
+        state_dict = result.arrays.to_torch_state_dict()
+        torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt")
+        os.remove("tmp.txt")
 
-    # Start strategy, run FedAvg for `num_rounds`
-    result = strategy.start(
-        grid=grid,
-        initial_arrays=arrays,
-        train_config=ConfigRecord({"lr": lr}),
-        num_rounds=num_rounds,
-        evaluate_fn=global_evaluate,
-    )
-    today = date.today()
-    unique_id = str(uuid.uuid4())
-    with open(f'{today}-{unique_id}-metrics.txt', 'w') as f:
+    with open(f'runs/{today}-{unique_id}/server-finished_metrics.txt', 'w') as f:
         f.write(str(dict(result.evaluate_metrics_serverapp)))
-
     # Save final model to disk
     print("\nSaving final model to disk...")
     state_dict = result.arrays.to_torch_state_dict()
-    torch.save(state_dict, f"{today}-{unique_id}-final_model.pt")
-
+    torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt") # TODO: may need to save nn.Module instead of state_dict
+    os.remove("tmp.txt")
 
 def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
     """Evaluate model on central data."""
@@ -62,5 +80,36 @@ def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
     # Evaluate the global model on the test set
     test_loss, test_acc = test(model, test_dataloader, device)
 
+    ## Testing on gold_standard, cardiologist1 + cardiologist2
+    ## HOLDOUT
+    model.eval()
+    scores = {}
+    for i, filepath in enumerate(glob.glob("../data/code-test/annotations/*.csv")):
+        if "dnn" not in filepath:
+            f = h5py.File("../data/code-test/ecg_tracings.hdf5", 'r')
+            traces = torch.tensor(np.array(f['tracings'], dtype=np.float32), dtype=torch.float32, device=device)
+            y_trues = torch.tensor(pd.read_csv(filepath)["AF"], dtype=torch.float16).reshape(-1,1)
+            
+            test_subset = filepath.replace("../data/code-test/annotations/", "").replace(".csv", "")
+            # Run forward pass
+            with torch.no_grad():
+                y_preds = model(traces).cpu().numpy()
+            
+            PrecisionRecallDisplay.from_predictions(y_trues, y_preds)
+            score = average_precision_score(y_trues, y_preds)
+            plt.title(f"PR-Curve on Annotated ECG Dataset - {test_subset}.png")
+            plt.savefig(f"runs/{today}-{unique_id}/prCODEtest-{test_subset}.png", dpi=300)
+            plt.close()
+           
+            # add to dictionary storing all holdout scores
+            scores[test_subset] = score
+
+    with open(f'runs/{today}-{unique_id}/holdoutmetrics-CODETEST.txt', 'a') as f:
+        f.write(f"{scores}\n")
+
+    record = MetricRecord({"comm_round": server_round, "serveragg_avg_prec": test_acc, "serveragg_loss": test_loss})
+    with open(f'runs/{today}-{unique_id}/serveragg-metrics.txt', 'a') as f:
+        f.write(f"{dict(record)}\n") 
+
     # Return the evaluation metrics
-    return MetricRecord({"avg_prec": test_acc, "loss": test_loss})
+    return record

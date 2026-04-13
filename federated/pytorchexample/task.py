@@ -62,7 +62,7 @@ def load_centralized_dataset():
 def load_datasets(partition_id: int, num_partitions: int, batch_size: int, partitioning: str = "iid", val: float = 1.0, device: torch.device = torch.device("cpu"), seed: Optional[int] = 42) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     trainloaders, testloader = [], []
     train_list = sorted(glob.glob("../data/code15-12l/*.hdf5"))
-    #print("Loading hdf5 ...", torch.cuda.device_count())
+
     trains = {
         "features": [],
         "labels": []
@@ -71,9 +71,8 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
     #print(os.getcwd())
     for file_ in train_list:
         if file_.replace("../data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
+            print("*** file removed from train_list", file_.replace("../data/code15-12l/", ""))
             train_list.remove(file_)
-
-    print(train_list)
     
     for i, filepath in enumerate(train_list):
         path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv' 
@@ -107,7 +106,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
     # partition the data -- courtesy: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
         alpha = val
-        min_required_samples_per_client = 1000
+        min_required_samples_per_client = 5000
 
         prng = np.random.default_rng(seed)
 
