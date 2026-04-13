@@ -63,9 +63,12 @@ cd federated/
 
 # dashboard can be viewed as a webpage at localhost:8265
 # NOTE: ray[default] needs to be installed by pip
+
+# *** at HEAD node of Ray, run >>> ***
 ray start --include-dashboard --head --temp-dir=$HOME/storage 
 
 # this should be in the same dir as where the HEAD ray session was started.
+# *** at each WORKER node of Ray, run >>> ***
 ray start --address="10.21.30.<>:6379" 
 
 # create shortcut here to change overall flwr config 
@@ -87,9 +90,10 @@ cat config.toml
 
 > Keep num_gpu and num_cpu same in both `.toml` files as a safety step to avoid inconsistent config loading.
 
-Finally, run:
+Finally:
 
 ```bash
+# *** at HEAD node of Ray, run the following two commands >>> ***
 # this must point to the HEAD node of the Ray setup
 export RAY_ADDRESS="10.21.30.<>:6379" 
 
