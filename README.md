@@ -58,20 +58,38 @@ source venv/bin/activate
 ```
 
 ```bash
-# -- dashboard can be viewed as a webpage at localhost:8265 given ray[default] is installed by pip
-ray start --include-dashboard --head --temp-dir=$HOME/storage # start in the federated/ directory.
-ray start --address="10.21.30.<>:6379" # this should be in the same dir as where the HEAD ray session was started.
+# start in the federated/ directory.
+cd federated/
+
+# dashboard can be viewed as a webpage at localhost:8265
+# NOTE: ray[default] needs to be installed by pip
+ray start --include-dashboard --head --temp-dir=$HOME/storage 
+
+# this should be in the same dir as where the HEAD ray session was started.
+ray start --address="10.21.30.<>:6379" 
+
+# create shortcut here to change overall flwr config (located in the home directory in ".flwr/")
 ln -s $HOME/.flwr/config.toml 1-starter-ecg-model/federated/config.toml
-cat pyproject.toml # project-local .toml file, where contextual config (num. local epochs, batch_size, partitioning_strategy, lr, communication rounds ...) & num_gpu and num_cpu
-cat config.toml # here the number of clients is controlled -- symlink to $HOME/.flwr/config.toml, if this is edited, that file also gets edited. 
-## Keep num_gpu and num_cpu same with pyproject.toml as a safety step to avoid inconsistent config loading.
+
+# view the project config
+cat pyproject.toml 
+# possible to change -> (num. local epochs, batch_size, partitioning_strategy, lr, communication rounds ...)
+# + how much num_gpu and num_cpu to allocate per client
+
+# here the number of clients is controlled -- symlink to $HOME/.flwr/config.toml, if this is edited, that file also gets edited. 
+cat config.toml 
+
+# Keep num_gpu and num_cpu same with pyproject.toml as a safety step to avoid inconsistent config loading.
 ```
 
 Finally, run:
 
 ```bash
-export RAY_ADDRESS="10.21.30.<>:6379" # this must point to the HEAD node of the Ray setup
-flwr run # run this in the same dir as the toml files.
+# this must point to the HEAD node of the Ray setup
+export RAY_ADDRESS="10.21.30.<>:6379" 
+
+# run this in the same dir as the toml files (as per the project file tree, should be in the "federated/" directory).
+flwr run 
 ```
 
 > **Common errors: the data files not found.**
