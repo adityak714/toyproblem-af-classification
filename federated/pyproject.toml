@@ -31,4 +31,4 @@ local-epochs = 1
 learning-rate = 0.0001
 batch-size = 256
 partitioning = "dirichlet"
-val = 200
+val = 0.1

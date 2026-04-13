@@ -18,7 +18,7 @@ def train(msg: Message, context: Context):
     # Load the model and initialize it with the received weights
     today = date.today() #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     logloc = ""
-    with open("tmp.txt") as f:
+    with open("tmp(1).txt") as f:
         logloc = f.read()
     model_path = f"{logloc}/output-client{context.node_config['partition-id']}.pt"
     partition_model = {"MODEL_STATE": msg.content["arrays"].to_torch_state_dict()}
@@ -55,7 +55,7 @@ def train(msg: Message, context: Context):
     metric_record = MetricRecord(metrics)
     content = RecordDict({"arrays": model_record, "metrics": metric_record})
 
-    with open(f'{logloc}/clients{context.node_config["num-partitions"]}-partitioning{context.run_config["partitioning"]}-commrounds{context.run_config["num-server-rounds"]}-loceps{context.run_config["local-epochs"]}.txt', "a") as logger:
+    with open(f'{logloc}/clients{context.node_config["num-partitions"]}-partitioning{context.run_config["partitioning"]}{context.run_config["val"]}-commrounds{context.run_config["num-server-rounds"]}-loceps{context.run_config["local-epochs"]}.txt', "a") as logger:
         logger.write(f"{str(dict(metric_record))}\n")
 
     return Message(content=content, reply_to=msg)
@@ -91,10 +91,10 @@ def evaluate(msg: Message, context: Context):
     content = RecordDict({"metrics": metric_record})
     today = date.today() #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     logloc = ""
-    with open("tmp.txt") as f:
+    with open("tmp(1).txt") as f:
         logloc = f.read()
 
-    with open(f'{logloc}/clients{context.node_config["num-partitions"]}-partitioning{context.run_config["partitioning"]}-commrounds{context.run_config["num-server-rounds"]}-loceps{context.run_config["local-epochs"]}.txt', "a") as logger:
+    with open(f'{logloc}/clients{context.node_config["num-partitions"]}-partitioning{context.run_config["partitioning"]}{val}-commrounds{context.run_config["num-server-rounds"]}-loceps{context.run_config["local-epochs"]}.txt', "a") as logger:
         logger.write(f"{str(dict(metric_record))}\n")
 
     return Message(content=content, reply_to=msg)
