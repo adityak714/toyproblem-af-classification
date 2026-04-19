@@ -18,7 +18,7 @@ def train(msg: Message, context: Context):
     # Load the model and initialize it with the received weights
     today = date.today() #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     logloc = ""
-    with open("tmp(1).txt") as f:
+    with open("tmp.txt") as f:
         logloc = f.read()
     model_path = f"{logloc}/output-client{context.node_config['partition-id']}.pt"
     partition_model = {"MODEL_STATE": msg.content["arrays"].to_torch_state_dict()}
@@ -91,7 +91,7 @@ def evaluate(msg: Message, context: Context):
     content = RecordDict({"metrics": metric_record})
     today = date.today() #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     logloc = ""
-    with open("tmp(1).txt") as f:
+    with open("tmp.txt") as f:
         logloc = f.read()
 
     with open(f'{logloc}/clients{context.node_config["num-partitions"]}-partitioning{context.run_config["partitioning"]}{val}-commrounds{context.run_config["num-server-rounds"]}-loceps{context.run_config["local-epochs"]}.txt', "a") as logger:

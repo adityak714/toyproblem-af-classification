@@ -4,7 +4,7 @@ import torch, os, uuid, json, glob, h5py, numpy as np, pandas as pd
 from matplotlib import pyplot as plt
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
-from flwr.serverapp.strategy import FedAvg
+from flwr.serverapp.strategy import FedAvg, FedProx
 from datetime import date
 from pytorchexample.task import ResNet1d, load_centralized_dataset, load_datasets, test
 from sklearn.metrics import average_precision_score, PrecisionRecallDisplay
@@ -13,6 +13,7 @@ from sklearn.metrics import average_precision_score, PrecisionRecallDisplay
 app = ServerApp()
 today = date.today()
 unique_id = str(uuid.uuid4())
+stratname = ''
 
 @app.main()
 def main(grid: Grid, context: Context) -> None:
@@ -21,6 +22,7 @@ def main(grid: Grid, context: Context) -> None:
     fraction_evaluate: float = context.run_config["fraction-evaluate"]
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["learning-rate"]
+    stratname = context.run_config["strategy"]
     
     os.environ["CURR_FLWR_SESSION_ID"] = unique_id
     with open("tmp.txt", 'w') as f:
@@ -35,9 +37,21 @@ def main(grid: Grid, context: Context) -> None:
     global_model = ResNet1d(n_classes=1)
     arrays = ArrayRecord(global_model.state_dict())
 
-    # Initialize FedAvg strategy
-    strategy = FedAvg(fraction_evaluate=fraction_evaluate)
-     
+    strategy = None
+
+    # Initialize FedPROX strategy (before: FEDAVG)
+    if stratname == 'fedprox':
+        proxmu = context.run_config["proxmu"]
+        strategy = FedProx(fraction_evaluate=fraction_evaluate, proximal_mu=proxmu) 
+        stratname = f'fedprox{proxmu}'
+    elif stratname == 'scaffold':
+        pass # stratname = 'Scaffold{...}'
+    else:
+        strategy = FedAvg(fraction_evaluate=fraction_evaluate) 
+
+    with open(f'{stratname}.txt', 'a'): 
+        pass
+
     try:
         # Start strategy, run FedAvg for `num_rounds`
         result = strategy.start(
@@ -48,7 +62,7 @@ def main(grid: Grid, context: Context) -> None:
             evaluate_fn=global_evaluate,
         )
     except KeyboardInterrupt as stopped_session:
-        with open(f'runs/{today}-{unique_id}/server-finished_metrics.txt', 'w') as f:
+        with open(f'runs/{today}-{unique_id}/server-{stratname}-finished_metrics.txt', 'w') as f:
             f.write(str(dict(result.evaluate_metrics_serverapp)))
         # Save final model to disk
         print("\nSaving final model to disk...")
@@ -56,7 +70,7 @@ def main(grid: Grid, context: Context) -> None:
         torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt")
         os.remove("tmp.txt")
 
-    with open(f'runs/{today}-{unique_id}/server-finished_metrics.txt', 'w') as f:
+    with open(f'runs/{today}-{unique_id}/server-{stratname}-finished_metrics.txt', 'w') as f:
         f.write(str(dict(result.evaluate_metrics_serverapp)))
     # Save final model to disk
     print("\nSaving final model to disk...")
@@ -108,7 +122,7 @@ def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
         f.write(f"{scores}\n")
 
     record = MetricRecord({"comm_round": server_round, "serveragg_avg_prec": test_acc, "serveragg_loss": test_loss})
-    with open(f'runs/{today}-{unique_id}/serveragg-metrics.txt', 'a') as f:
+    with open(f'runs/{today}-{unique_id}/serveragg-{stratname}-metrics.txt', 'a') as f:
         f.write(f"{dict(record)}\n") 
 
     # Return the evaluation metrics
