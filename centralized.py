@@ -149,7 +149,7 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
     
     num_epochs = num_rounds # 10
 
-    pos_weight = torch.tensor([49], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
+    pos_weight = torch.tensor([61], device=gpu_id) # mean ratio of neg. samples / pos. samples in all chunks of code15 to tackle class imbalance (only around 2% are positives)
     
     # =============== Define loss function ====================================#
     loss_function = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -164,7 +164,7 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
     tqdm.write("Done!\n")
     
     # =============== Define lr scheduler =====================================#
-    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "max", patience=2)
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=1)
    
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.to(gpu_id)
@@ -187,13 +187,16 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
             
             # load labels
             ids_traces = np.array(f['exam_id'])
-            df = pd.read_csv(path_to_csv_train)
-            #df = df.drop_duplicates(subset=["patient_id"])
+            df = pd.read_csv(path_to_csv_train)#.reset_index(drop=True)
             f.close()
-            df.set_index('exam_id', inplace=True)
+            df = df.set_index('exam_id')
+            df = df.drop_duplicates(subset=["patient_id"], keep='last')
             df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
             labels = torch.tensor(np.array(df['AF'], dtype=np.float16), dtype=torch.float16, device=gpu_id).reshape(-1,1)
-            #traces = traces[:labels.shape[0],:,:]
+            #print(df.index, torch.tensor(df.index))
+            print(torch.tensor(np.isin(ids_traces, np.array(df.index)).nonzero()[0], dtype=torch.int32))
+            traces = torch.index_select(traces, 0, torch.tensor(np.isin(ids_traces, np.array(df.index)).nonzero()[0], dtype=torch.int32)) #[:labels.shape[0],:,:]
+            print(traces.size(), labels.size())
             print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1])) 
             print(">> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1]))
 
@@ -207,7 +210,7 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
             print("at", filepath, " >> put in validation!")
 
     vset = torch.utils.data.ConcatDataset(vloaders)
-    vloader = DataLoader(vset, batch_size=256, shuffle=False, sampler=DistributedSampler(vset))
+    vloader = DataLoader(vset, batch_size=512, shuffle=False, sampler=DistributedSampler(vset))
 
     # =============== Train model =============================================#
     tqdm.write("Training...")
@@ -240,14 +243,16 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
                     
                     # load labels
                     ids_traces = np.array(f['exam_id'])
-                    df = pd.read_csv(path_to_csv_train)
-                    #df = df.drop_duplicates(subset=['patient_id'])
-                    #traces = traces[:labels.shape[0],:,:]
+                    df = pd.read_csv(path_to_csv_train)#.reset_index(drop=True)
                     f.close()
 
                     df = df.set_index('exam_id')
+                    df = df.drop_duplicates(subset=['patient_id'], keep='last')
                     df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
                     labels = torch.tensor(np.array(df['AF'], dtype=np.float16), dtype=torch.float16, device=gpu_id).reshape(-1,1)
+                    print(traces.size(), labels.size()) 
+                    traces = torch.index_select(traces, 0, torch.tensor(np.isin(ids_traces, np.array(df.index)).nonzero()[0], dtype=torch.int32)) #[:labels.shape[0],:,:]
+                    print(traces.size(), labels.size())
                     print("\nat", i, ">> number of pos. examples >>", len(df[df['AF']==1])) 
                     print(">> weight >>", len(df[df['AF']==0])/len(df[df['AF']==1]))
                     datasets.append(TensorDataset(traces, labels))
@@ -362,7 +367,7 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
             fig2.tight_layout()
             fig2.savefig(f"runs_centralized/{id_}-lrscheduling-centralizedcode15.png")
             plt.close()
-            lr_scheduler.step(avgpreclist[-1])
+            lr_scheduler.step(valid_loss_all[-1])
         #if lrs[-1] < 1e-8:
         #    sys.exit(0)
                     
@@ -374,7 +379,7 @@ if __name__ == "__main__":
     parser.add_argument("-lr", "--learning_rate", type=float, default=1e-4)
     parser.add_argument("-wd", "--weight_decay", type=float, default=0.01)
     parser.add_argument("-bs", "--batch_size", type=int, default=256)
-    parser.add_argument("-ep", "--epochs", type=int, default=10)
+    parser.add_argument("-ep", "--epochs", type=int, default=20)
     args = parser.parse_args()
     main(num_rounds=args.epochs, num_chunks=-1, 
         learning_rate=args.learning_rate, 

@@ -36,15 +36,16 @@ def load_centralized_dataset():
             # load labels
             ids_traces = np.array(f['exam_id'])
             df = pd.read_csv(path_to_csv_train)
-            #df = df.drop_duplicates(subset=["patient_id"])
             f.close()
             df = df.set_index('exam_id')
+            df = df.drop_duplicates(subset=["patient_id"], keep='last')
             df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
             labels = torch.tensor(
                 np.array(df['AF'], dtype=np.float32), 
                 dtype=torch.float32,
                 #device=device
             ).reshape(-1,1)
+            traces = torch.index_select(traces, 0, torch.tensor(np.isin(ids_traces, np.array(df.index)).nonzero()[0], dtype=torch.int32)) #[:labels.shape[0],:,:]
             
             # load dataset
             dataset = TensorDataset(traces, labels)
@@ -81,15 +82,18 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         # load traces
         f = h5py.File(path_to_h5_train, 'r')
         traces = torch.tensor(np.array(f['tracings'][()], dtype=np.float32), dtype=torch.float32)[:-1,:,:]
+        ids_traces = np.array(f['exam_id'])
         print("traces successfully converted to tensors ...")
 
         # load labels
         df = pd.read_csv(path_to_csv_train)
         df = df.set_index('exam_id')
-        df = df.reindex(np.array(f['exam_id'])).dropna(subset=["AF"]) # make sure the order is the same
+        df = df.drop_duplicates(subset=["patient_id"], keep='last')
+        df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
         
-        labels = np.array(df[['AF', 'age']], dtype=np.float32).reshape(-1,2) 
-        
+        labels = np.array(df[['AF', 'age']], dtype=np.float32).reshape(-1,2)
+        traces = torch.index_select(traces, 0, torch.tensor(np.isin(ids_traces, np.array(df.index)).nonzero()[0], dtype=torch.int32))  # [:labels.shape[0],:,:]
+
         if len(trains["features"]) > 0:
             trains["features"] = np.vstack((trains["features"], traces.detach().cpu()))
             trains["labels"] = np.vstack((trains["labels"], labels))

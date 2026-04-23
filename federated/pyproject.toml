@@ -25,12 +25,13 @@ serverapp = "pytorchexample.server_app:app"
 clientapp = "pytorchexample.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 30
+num-server-rounds = 25
 fraction-evaluate = 0.5
 local-epochs = 1
 learning-rate = 0.0001
 batch-size = 256
-strategy = 'fedprox'
+strategy = 'fedavg'
 proxmu = 0.5
 partitioning = "dirichlet"
-val = 0.1
+val = 200
+run_uid = "avg-cr25-cl10-lep1-d200"

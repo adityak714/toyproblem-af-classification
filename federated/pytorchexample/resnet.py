@@ -111,7 +111,7 @@ class ResNet1d(nn.Module):
     # list(zip([64, 128, 196, 256, 320], [4096, 1024, 256, 64, 16]))
     def __init__(self, n_classes, 
                  input_dim=(12, 4096), 
-                 blocks_dim=list(zip([64, 128, 320], [4096, 1024, 16])), 
+                 blocks_dim=list(zip([64, 128, 196, 256, 320], [4096, 1024, 256, 64, 16])), 
                  kernel_size=17, 
                  dropout_rate=0.4):
         super(ResNet1d, self).__init__()
