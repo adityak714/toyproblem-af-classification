@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from datasets import Dataset
 from torch.nn.parameter import Parameter
-from torch.optim import SGD, Optimizer, Adam
+from torch.optim import SGD, Optimizer, AdamW
 from torch.utils.data import DataLoader, TensorDataset, Subset, random_split, ConcatDataset
 from flwr.common import Scalar, Context
 from typing import Callable, Dict, List, OrderedDict, Union, Optional, Tuple
@@ -18,6 +18,23 @@ import ray.train.torch
 import ray.train
 
 fds = None  # Cache FederatedDataset
+
+class ScaffoldOptimizer(SGD):
+    """Implements SGD optimizer step function as defined in the SCAFFOLD paper."""
+
+    def __init__(self, grads, step_size, momentum, weight_decay):
+        super().__init__(
+            grads, lr=step_size, momentum=momentum, weight_decay=weight_decay
+        )
+
+    def step_custom(self, server_cv, client_cv):
+        """Implement the custom step function fo SCAFFOLD."""
+        # y_i = y_i - \eta * (g_i + c - c_i)  -->
+        # y_i = y_i - \eta*(g_i + \mu*b_{t}) - \eta*(c - c_i)
+        self.step()
+        for group in self.param_groups:
+            for par, s_cv, c_cv in zip(group["params"], server_cv, client_cv):
+                par.data.add_(s_cv - c_cv, alpha=-group["lr"])
 
 def load_centralized_dataset():
     """Load entire test set (selected to be exams_part0, exams_part1, 2 and 3) and return the dataloader."""
@@ -75,6 +92,17 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             print("*** file removed from train_list", file_.replace("../data/code15-12l/", ""))
             train_list.remove(file_)
     
+    #if fds is not None:
+    #    return DataLoader(
+    #        fds[0][partition_id], 
+    #        batch_size=batch_size, 
+    #        shuffle=False
+    #    ), DataLoader(
+    #        fds[1][partition_id], 
+    #        batch_size=batch_size, 
+    #        shuffle=False
+    #    )
+
     for i, filepath in enumerate(train_list):
         path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv' 
         #print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
@@ -110,7 +138,7 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
     # partition the data -- courtesy: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
         alpha = val
-        min_required_samples_per_client = 5000
+        min_required_samples_per_client = 1500
 
         prng = np.random.default_rng(seed)
 
@@ -121,54 +149,119 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
             tmp_t = np.array(tmp_t)
         if isinstance(tmp_t, torch.Tensor):
             tmp_t = tmp_t.numpy()
-
+        
         targets = tmp_t[:,1].flatten()
-        bins = pd.cut(targets, [10, 20, 30, 40, 50, 60, 70, 80])
+        bins = pd.cut(targets, [10, 20, 30, 40, 50, 60, 70, 80, 90]) # 100])
+
+        print(bins.value_counts())
+        print("..................")
         
         classes = list(set(bins))
-        classes.remove(np.nan)        
+        if np.nan in classes:
+            classes.remove(np.nan)
+        classes = sorted(classes)
         num_classes = len(classes)
         total_samples = len(targets)
 
-        min_samples = 0
-        while min_samples < min_required_samples_per_client:
-            idx_clients: List[List] = [[] for _ in range(num_partitions)]
-            for k in range(num_classes):
-                idx_k = []
-                for j, label in enumerate(targets):
-                    if label in classes[k]:
-                        idx_k.append(j)
-                prng.shuffle(idx_k)
-                proportions = prng.dirichlet(np.repeat(alpha, num_partitions))
-                proportions = np.array(
-                    [
-                        p * (len(idx_j) < total_samples / num_partitions)
-                        for p, idx_j in zip(proportions, idx_clients)
-                    ]
-                )
-                proportions = proportions / proportions.sum()
-                proportions = (np.cumsum(proportions) * len(idx_k)).astype(int)[:-1]
-                idx_k_split = np.split(idx_k, proportions)
-                idx_clients = [
-                    idx_j + idx.tolist() for idx_j, idx in zip(idx_clients, idx_k_split)
-                ]
-                min_samples = min([len(idx_j) for idx_j in idx_clients])
+        upper_size = int((len(tmp_t))/num_partitions)
+        
+        per_label_cutoff = 12000 # int(0.4*total_samples/num_classes)
+        print("per_label_cutoff", per_label_cutoff)
+        
+        all_classes = [[] for _ in range(num_classes)]
+        for i, class_ in enumerate(classes):
+            for j, label in enumerate(targets):
+                if label in class_:
+                    all_classes[i].append(j)
+            prng.shuffle(all_classes[i])
 
-        splits = [random_split(Subset(trainset, idxs), [0.8, 0.2]) for idxs in idx_clients]
+
+
+
+
+
+        
+        idx_clients = np.ones((num_partitions, num_classes), dtype=np.int32)
+        for i in range(num_partitions):
+            idx_clients[i] = idx_clients[i]*upper_size
+            idx_clients[i] = idx_clients[i]*prng.dirichlet(np.repeat(alpha, num_classes))
+            deficit = upper_size - np.sum(idx_clients[i])
+            idx_clients[i, j % num_classes] += int(deficit/num_classes)
+        
+        for j in range(num_classes):
+            if np.sum(idx_clients[:,j]) > per_label_cutoff:
+                deficit = int(np.sum(idx_clients[:,j]) - per_label_cutoff) 
+                reduc_factor = (per_label_cutoff/np.sum(idx_clients[:,j]))
+                idx_clients[:,j] = idx_clients[:,j]*(reduc_factor)
+
+        max_lim = np.max(np.sum(idx_clients, axis=1))
+        for i in range(num_partitions):
+            if np.sum(idx_clients[i,:]) < max_lim:
+                deficit = max_lim - np.sum(idx_clients[i,:])
+                #for j in range(deficit):
+                idx_clients[i, j % num_classes] += int(deficit/num_classes)
+        
+        #print(counter, "datasets made")
+        
+        # regulating
+        #print("NEW >>>>>>")
+        #idx_clients = [np.array(subarr, dtype=np.int32) for subarr in idx_clients]
+        #print(np.sum(idx_clients, axis=1))
+        #print(np.sum(idx_clients, axis=0))
+
+        target = int(62000/num_partitions) 
+        for i in range(num_partitions):
+            if idx_clients[i].sum() > target:
+                print("size of set for partition: (will be reduced to)", target, "-- ", idx_clients[i].sum())
+                surplus = int(idx_clients[i].sum()) - target
+                while surplus > 0:
+                    pos = np.where(idx_clients[i] > 0)[0]
+                    if pos.size == 0:
+                        break
+                    k = min(surplus, pos.size)
+                    idx_clients[i][pos[:k]] -= 1
+                    surplus -= k
+        
+        import sys
+        print(np.array(idx_clients, dtype=np.int32))
+        proportions = np.cumsum(idx_clients, axis=0, dtype=np.int32)
+        print(np.sum(idx_clients, axis=1))
+        print("PROPORTIONS\n", proportions)
+        clients_sets = [np.split(curr_class, proportions[:,i])[:-1] for i, curr_class in enumerate(all_classes)] 
+        # initially in untransposed form --> (num_classes, num_partitions)
+
+        #partitioned_sets = [[] for _ in range(num_partitions)]
+        #for item in clients_sets:
+        #    print("in each class collection there is", len(item))
+        #    for i in range(len(item)):
+        #        partitioned_sets[i].append(item[i])
+        
+        #print(len(partitioned_sets[0]))
+        partitioned_sets = [list(i) for i in zip(*clients_sets)] 
+        print(len(partitioned_sets)) 
+        for i, idxs in enumerate(partitioned_sets):
+            partitioned_sets[i] = [x for xs in idxs for x in xs]
+            #partitioned_sets[i] = partitioned_sets[i][:4000]
+            print(len(partitioned_sets[i]))
+
+        print("clients have following >>>", len(clients_sets), [len(clients_sets[i]) for i in range(len(clients_sets))])
+        
+        set_per_client = [Subset(trainset, idxs) for idxs in partitioned_sets]
+        splits = [random_split(client_set, [0.8, 0.2]) for client_set in set_per_client]
         trainsets_per_client = [set_[0] for set_ in splits]
-        testsets_per_client = [set_[1] for set_ in splits]
+        testsets_per_client = [set_[1] for set_ in splits] 
+        #fds = (trainsets_per_client, testsets_per_client)
 
         ages = [[] for i in range(num_partitions)]
         for i in range(num_partitions):
-            for x,y in trainsets_per_client[i]:
+            for x,y in set_per_client[i]:
                 ages[i].append(y[1].cpu().numpy())
             ages[i] = np.array(ages[i]).flatten()
 
         import pickle
         with open(f'clients{num_partitions}-dirichl{alpha}.pkl', 'wb') as f:
             pickle.dump(ages, f)
-        #import sys
-        #sys.exit(0)
+
         return DataLoader(
             trainsets_per_client[partition_id], 
             batch_size=batch_size, 
@@ -280,7 +373,6 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         with open(f'clients{num_partitions}-sim{similarity}.pkl', 'wb') as f:
             pickle.dump(ages, f)
 
-        #import sys
         #sys.exit(0)
         
         return DataLoader(
@@ -316,9 +408,9 @@ def train_fedavg(config) -> None:
     #trainloader = ray.train.torch.prepare_data_loader(trainloader)
     print("****** CUDA DEVICES:", torch.cuda.device_count())
     device = torch.device(f"cuda:{partition_id % torch.cuda.device_count()}")
-    pos_weight = torch.tensor([49], device=device)
+    pos_weight = torch.tensor([61], device=device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=weight_decay) #,weight_decay=weight_decay)
+    optimizer = AdamW(net.parameters(), lr=learning_rate, weight_decay=weight_decay) #,weight_decay=weight_decay)
 
     # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     # model.to(device)
@@ -415,25 +507,67 @@ def test(net, testloader: DataLoader, device) -> Tuple[float, float]: # == rank 
     ap = np.mean(avg_precisions)
     return loss, ap
 
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument("-id", "--partition_id", type=int)
-#     parser.add_argument("-c", "--num_clients", type=int)
-#     parser.add_argument("-p", "--partitioning", type=str, default="dirichlet")
-#     parser.add_argument("-m", "--model_path", type=str) # "model.pt"
-#     parser.add_argument("-bs", "--batch_size", type=int, default=256)
-#     parser.add_argument("-lr", "--learning_rate", type=float, default=1e-4)
-#     parser.add_argument("-wd", "--weight_decay", type=float, default=0.01)
-#     parser.add_argument("-ep", "--epochs", type=int, default=10)
-#     args = parser.parse_args()
-    
-#     train_fedavg(
-#         args.model_path,
-#         trainloader,
-#         #args.partition_id, 
-#         #args.num_clients, 
-#         #args.batch_size, 
-#         #args.partitioning,
-#         args.epochs,
-#         args.learning_rate,
-#     )
+def train_scaffold(
+    net: nn.Module,
+    trainloader: DataLoader,
+    device: torch.device,
+    epochs: int,
+    learning_rate: float,
+    momentum: float,
+    weight_decay: float,
+    server_cv: torch.Tensor,
+    client_cv: torch.Tensor,
+) -> None:
+    # pylint: disable=too-many-arguments
+    """Train the network on the training set using SCAFFOLD.
+
+    Parameters
+    ----------
+    net : nn.Module
+        The neural network to train.
+    trainloader : DataLoader
+        The training set dataloader object.
+    device : torch.device
+        The device on which to train the network.
+    epochs : int
+        The number of epochs to train the network.
+    learning_rate : float
+        The learning rate.
+    momentum : float
+        The momentum for SGD optimizer.
+    weight_decay : float
+        The weight decay for SGD optimizer.
+    server_cv : torch.Tensor
+        The server's control variate.
+    client_cv : torch.Tensor
+        The client's control variate.
+    """
+    criterion = nn.CrossEntropyLoss()
+    optimizer = ScaffoldOptimizer(
+        net.parameters(), learning_rate, momentum, weight_decay
+    )
+    net.train()
+    for _ in range(epochs):
+        net = _train_one_epoch_scaffold(
+            net, trainloader, device, criterion, optimizer, server_cv, client_cv
+        )
+
+def _train_one_epoch_scaffold(
+    net: nn.Module,
+    trainloader: DataLoader,
+    device: torch.device,
+    criterion: nn.Module,
+    optimizer: ScaffoldOptimizer,
+    server_cv: torch.Tensor,
+    client_cv: torch.Tensor,
+) -> nn.Module:
+    # pylint: disable=too-many-arguments
+    """Train the network on the training set for one epoch."""
+    for data, target in trainloader:
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = net(data)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step_custom(server_cv, client_cv)
+    return net
