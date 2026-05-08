@@ -78,6 +78,7 @@ def load_centralized_dataset():
 
 # def load_data(partition_id: int, num_partitions: int, batch_size: int):
 def load_datasets(partition_id: int, num_partitions: int, batch_size: int, partitioning: str = "iid", val: float = 1.0, device: torch.device = torch.device("cpu"), seed: Optional[int] = 42) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
+    np.random.seed(seed)
     trainloaders, testloader = [], []
     train_list = sorted(glob.glob("../data/code15-12l/*.hdf5"))
 
@@ -85,66 +86,53 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         "features": [],
         "labels": []
     }
-    #device = torch.device("cuda")
-    #print(os.getcwd())
+
     for file_ in train_list:
         if file_.replace("../data/code15-12l/", "") in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
             print("*** file removed from train_list", file_.replace("../data/code15-12l/", ""))
             train_list.remove(file_)
-    
-    #if fds is not None:
-    #    return DataLoader(
-    #        fds[0][partition_id], 
-    #        batch_size=batch_size, 
-    #        shuffle=False
-    #    ), DataLoader(
-    #        fds[1][partition_id], 
-    #        batch_size=batch_size, 
-    #        shuffle=False
-    #    )
-
+   
     for i, filepath in enumerate(train_list):
-        path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv' 
-        #print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
+        if filepath.replace("../data/code15-12l/", "") not in ["exams_part0.hdf5", "exams_part1.hdf5", "exams_part2.hdf5", "exams_part3.hdf5"]:
+            path_to_h5_train, path_to_csv_train = filepath, '../data/code15-12l/exams.csv' 
+            #print("path_to_h5_train:", path_to_h5_train, "path_to_csv", path_to_csv_train)
 
-        # load traces
-        f = h5py.File(path_to_h5_train, 'r')
-        traces = torch.tensor(np.array(f['tracings'][()], dtype=np.float32), dtype=torch.float32)[:-1,:,:]
-        ids_traces = np.array(f['exam_id'])
-        print("traces successfully converted to tensors ...")
+            # load traces
+            f = h5py.File(path_to_h5_train, 'r')
+            traces = torch.tensor(np.array(f['tracings'][()], dtype=np.float32), dtype=torch.float32)[:-1,:,:]
+            ids_traces = np.array(f['exam_id'])
+            print("traces successfully converted to tensors ...")
 
-        # load labels
-        df = pd.read_csv(path_to_csv_train)
-        df = df.set_index('exam_id')
-        df = df.drop_duplicates(subset=["patient_id"], keep='last')
-        df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
+            # load labels
+            df = pd.read_csv(path_to_csv_train) # "exams.csv"
+            df = df.set_index('exam_id')
+            df = df.drop_duplicates(subset=["patient_id"], keep='last')
+            df = df.reindex(ids_traces).dropna(subset=["AF"]) # make sure the order is the same
         
-        labels = np.array(df[['AF', 'age']], dtype=np.float32).reshape(-1,2)
-        traces = torch.index_select(traces, 0, torch.tensor(np.isin(ids_traces, np.array(df.index)).nonzero()[0], dtype=torch.int32))  # [:labels.shape[0],:,:]
+            labels = np.array(df[['AF', 'age']], dtype=np.float32).reshape(-1,2)
+            traces = torch.index_select(traces, 0, torch.tensor(np.isin(ids_traces, np.array(df.index)).nonzero()[0], dtype=torch.int32))  # [:labels.shape[0],:,:]
 
-        if len(trains["features"]) > 0:
-            trains["features"] = np.vstack((trains["features"], traces.detach().cpu()))
-            trains["labels"] = np.vstack((trains["labels"], labels))
-            print("VSTACK DONE >>", len(trains["features"]), len(trains["labels"]))
-        else:
-            trains["features"] = traces.detach().cpu()
-            trains["labels"] = labels
+            if len(trains["features"]) > 0:
+                trains["features"] = np.vstack((trains["features"], traces.detach().cpu()))
+                trains["labels"] = np.vstack((trains["labels"], labels))
+                print("VSTACK DONE >>", len(trains["features"]), len(trains["labels"]))
+            else:
+                trains["features"] = traces.detach().cpu()
+                trains["labels"] = labels
 
     trainset = TensorDataset(
         torch.tensor(trains["features"], dtype=torch.float32),
         torch.tensor(trains["labels"], dtype=torch.float32)
     )
 
-    # partition the data -- courtesy: https://flower.ai/docs/baselines/niid_bench.html
+    # partition the data -- modified impl originally from: https://flower.ai/docs/baselines/niid_bench.html
     if partitioning == "dirichlet":
         alpha = val
-        min_required_samples_per_client = 1500
-
+        #min_required_samples_per_client = 1500
         prng = np.random.default_rng(seed)
-
         # get the targets
         tmp_t = [item[1].cpu() for item in trainset] # rem_trainset.dataset.targets
-
+    
         if isinstance(tmp_t, list):
             tmp_t = np.array(tmp_t)
         if isinstance(tmp_t, torch.Tensor):
@@ -152,20 +140,23 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
         
         targets = tmp_t[:,1].flatten()
         bins = pd.cut(targets, [10, 20, 30, 40, 50, 60, 70, 80, 90]) # 100])
-
+        
         print(bins.value_counts())
         print("..................")
-        
+    
         classes = list(set(bins))
         if np.nan in classes:
             classes.remove(np.nan)
         classes = sorted(classes)
         num_classes = len(classes)
         total_samples = len(targets)
-
-        upper_size = int((len(tmp_t))/num_partitions)
-        
-        per_label_cutoff = 12000 # int(0.4*total_samples/num_classes)
+    
+        ### GOAL: adjusting client sizes to be as equal as possible
+        # the smallest age bin has around 12,000 values, hence we want at least that many samples uniformly per client
+        # ---> smallest age bin * num_partitions = 12,000 (use a small safety margin, so multiply this by 0.7 or equiv.)
+        # NEW: customized per label cutoffs to minimize loss of data points for training
+        target = int(140000/num_partitions)
+        per_label_cutoff = [10000, 25500, 25500, 25500, 25500, 25500, 25500, 12000] # basically same as target based on the distribution ########## int(0.4*total_samples/num_classes)
         print("per_label_cutoff", per_label_cutoff)
         
         all_classes = [[] for _ in range(num_classes)]
@@ -174,45 +165,58 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
                 if label in class_:
                     all_classes[i].append(j)
             prng.shuffle(all_classes[i])
-
-
-
-
-
-
         
         idx_clients = np.ones((num_partitions, num_classes), dtype=np.int32)
+        for i in range(num_classes):
+            idx_clients[:,i] = idx_clients[:,i] * target
+            idx_clients[:,i] = idx_clients[:,i] * prng.dirichlet(np.repeat(alpha, num_partitions))
+    
         for i in range(num_partitions):
-            idx_clients[i] = idx_clients[i]*upper_size
-            idx_clients[i] = idx_clients[i]*prng.dirichlet(np.repeat(alpha, num_classes))
-            deficit = upper_size - np.sum(idx_clients[i])
-            idx_clients[i, j % num_classes] += int(deficit/num_classes)
-        
-        for j in range(num_classes):
-            if np.sum(idx_clients[:,j]) > per_label_cutoff:
-                deficit = int(np.sum(idx_clients[:,j]) - per_label_cutoff) 
-                reduc_factor = (per_label_cutoff/np.sum(idx_clients[:,j]))
-                idx_clients[:,j] = idx_clients[:,j]*(reduc_factor)
-
-        max_lim = np.max(np.sum(idx_clients, axis=1))
-        for i in range(num_partitions):
-            if np.sum(idx_clients[i,:]) < max_lim:
-                deficit = max_lim - np.sum(idx_clients[i,:])
-                #for j in range(deficit):
-                idx_clients[i, j % num_classes] += int(deficit/num_classes)
-        
-        #print(counter, "datasets made")
-        
-        # regulating
-        #print("NEW >>>>>>")
-        #idx_clients = [np.array(subarr, dtype=np.int32) for subarr in idx_clients]
-        #print(np.sum(idx_clients, axis=1))
-        #print(np.sum(idx_clients, axis=0))
-
-        target = int(62000/num_partitions) 
-        for i in range(num_partitions):
+            n = idx_clients[i].size
             if idx_clients[i].sum() > target:
-                print("size of set for partition: (will be reduced to)", target, "-- ", idx_clients[i].sum())
+                print("size of partition: (will be decreased to)", target, "-- ", idx_clients[i].sum())
+                surplus = int(idx_clients[i].sum()) - target
+                while surplus > 0:
+                    pos = np.where(idx_clients[i] > 0)[0]
+                    if pos.size == 0:
+                        break
+                    k = min(surplus, pos.size)
+                    idx_clients[i][pos[:k]] -= 1
+                    surplus -= k
+            elif idx_clients[i].sum() < target:
+                print("size of partition: (will be increased to)", target, "-- ", idx_clients[i].sum())
+                deficit = target - int(idx_clients[i].sum())
+                while deficit > 0:
+                    pos = np.where((idx_clients[i] > 0))[0]
+                    if pos.size == 0:
+                        break
+                    k = min(deficit, pos.size)
+                    idx_clients[i][pos[:k]] += 1 # if idx_clients[i][pos[j]] + 1 <= per_label_cutoff else 0
+                    deficit -= k # if idx_clients[i][pos[j]] <= per_label_cutoff else 0
+    
+        for i in range(num_classes):
+            while idx_clients[:, i].sum() > per_label_cutoff[i]:
+                pos = np.where(idx_clients[:,i] > 1)[0]
+                if pos.size == 0:
+                    break
+                idx_clients[pos, i] -= 1
+            while idx_clients[:, i].sum() < per_label_cutoff[i]:
+                pos = np.where((idx_clients[:,i] > 0) & (idx_clients[:,i] < per_label_cutoff[i]))[0]
+                if pos.size == 0:
+                    break
+                idx_clients[pos, i] += 1
+    
+        for i in range(num_partitions):
+            for j in range(num_classes):
+                if idx_clients[i,j] > 0 and np.sum(idx_clients[i,:]) < target:
+                    idx_clients[i,j] += 1
+                elif idx_clients[i,j] > 0 and np.sum(idx_clients[i,:]) > target:
+                    idx_clients[i,j] -= 1
+
+        for i in range(num_partitions):
+            n = idx_clients[i].size
+            if idx_clients[i].sum() > target:
+                print("size of partition: (will be decreased to)", target, "-- ", idx_clients[i].sum())
                 surplus = int(idx_clients[i].sum()) - target
                 while surplus > 0:
                     pos = np.where(idx_clients[i] > 0)[0]
@@ -222,29 +226,16 @@ def load_datasets(partition_id: int, num_partitions: int, batch_size: int, parti
                     idx_clients[i][pos[:k]] -= 1
                     surplus -= k
         
-        import sys
-        print(np.array(idx_clients, dtype=np.int32))
-        proportions = np.cumsum(idx_clients, axis=0, dtype=np.int32)
-        print(np.sum(idx_clients, axis=1))
-        print("PROPORTIONS\n", proportions)
+        proportions = np.cumsum(idx_clients, axis=0, dtype=np.int32)    
         clients_sets = [np.split(curr_class, proportions[:,i])[:-1] for i, curr_class in enumerate(all_classes)] 
-        # initially in untransposed form --> (num_classes, num_partitions)
-
-        #partitioned_sets = [[] for _ in range(num_partitions)]
-        #for item in clients_sets:
-        #    print("in each class collection there is", len(item))
-        #    for i in range(len(item)):
-        #        partitioned_sets[i].append(item[i])
-        
-        #print(len(partitioned_sets[0]))
+    
         partitioned_sets = [list(i) for i in zip(*clients_sets)] 
         print(len(partitioned_sets)) 
         for i, idxs in enumerate(partitioned_sets):
             partitioned_sets[i] = [x for xs in idxs for x in xs]
-            #partitioned_sets[i] = partitioned_sets[i][:4000]
-            print(len(partitioned_sets[i]))
-
-        print("clients have following >>>", len(clients_sets), [len(clients_sets[i]) for i in range(len(clients_sets))])
+            print("client", i, "has", len(partitioned_sets[i]), "samples")
+    
+        # the proportions are used to do the cumsum along the clients' axis, so that we can split the data of each class according to the proportions to allocate each client.
         
         set_per_client = [Subset(trainset, idxs) for idxs in partitioned_sets]
         splits = [random_split(client_set, [0.8, 0.2]) for client_set in set_per_client]
@@ -519,33 +510,69 @@ def train_scaffold(
     client_cv: torch.Tensor,
 ) -> None:
     # pylint: disable=too-many-arguments
-    """Train the network on the training set using SCAFFOLD.
-
-    Parameters
-    ----------
-    net : nn.Module
-        The neural network to train.
-    trainloader : DataLoader
-        The training set dataloader object.
-    device : torch.device
-        The device on which to train the network.
-    epochs : int
-        The number of epochs to train the network.
-    learning_rate : float
-        The learning rate.
-    momentum : float
-        The momentum for SGD optimizer.
-    weight_decay : float
-        The weight decay for SGD optimizer.
-    server_cv : torch.Tensor
-        The server's control variate.
-    client_cv : torch.Tensor
-        The client's control variate.
-    """
-    criterion = nn.CrossEntropyLoss()
+    print("****** CUDA DEVICES:", torch.cuda.device_count())
+    device = torch.device(f"cuda:{partition_id % torch.cuda.device_count()}")
+    pos_weight = torch.tensor([61], device=device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = ScaffoldOptimizer(
         net.parameters(), learning_rate, momentum, weight_decay
     )
+    
+    # pylint: disable=too-many-arguments
+    """Train the network on the training set using FedAvg."""
+    net = config["net"] # ray.train.torch.prepare_model(net)
+    partition_id = config["partition_id"]
+    num_partitions = config["num_partitions"]
+    batch_size = config["batch_size"]
+    partitioning = config["partitioning"]
+    val = config["val"]
+    epochs = config["epochs"]
+    learning_rate = config["lr"]
+    momentum = 0
+    weight_decay = 0.01
+
+    #trainloader = ray.train.torch.prepare_data_loader(trainloader)
+    print("****** CUDA DEVICES:", torch.cuda.device_count())
+    device = torch.device(f"cuda:{partition_id % torch.cuda.device_count()}")
+    pos_weight = torch.tensor([61], device=device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    optimizer = AdamW(net.parameters(), lr=learning_rate, weight_decay=weight_decay) #,weight_decay=weight_decay)
+
+    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    # model.to(device)
+    # model = DDP(model, device_ids=[device])
+    count = 0
+    trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size, partitioning=partitioning, val=val, device=device)
+    for _ in enumerate(trainloader):
+        count += 1
+    print("****** CLIENT: ", partition_id, "BATCH SIZE:", batch_size, "DATA SIZE:", count)
+
+    loss = 0
+    for i in range(epochs):
+        #if ray.train.get_context().get_world_size() > 1:
+        #    trainloader.sampler.set_epoch(i)
+        loss, model = _train_one_epoch(net, device, trainloader, criterion, optimizer, i)
+        #with tempfile.TemporaryDirectory() as temp_checkpoint_dir:
+        #    torch.save(model.module.state_dict(), os.path.join(temp_checkpoint_dir, "model.pt"))
+        #    ray.train.report(
+        #        {
+        #            "loss": loss, 
+        #            "epoch": i, 
+        #            "partition_id": partition_id,
+        #            "trainloader_size": len(trainloader)
+        #        },
+        #        checkpoint=ray.train.Checkpoint.from_directory(temp_checkpoint_dir),
+        #    )
+        #if ray.train.get_context().get_world_rank() == 0:
+        #    print(metrics)
+
+    # -- END MULTIGPU PROCESS --
+    # destroy_process_group()
+    return loss, model, count
+    
+    
+    
+    
     net.train()
     for _ in range(epochs):
         net = _train_one_epoch_scaffold(

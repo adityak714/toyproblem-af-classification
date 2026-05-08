@@ -33,5 +33,5 @@ batch-size = 256
 strategy = 'fedavg'
 proxmu = 0.5
 partitioning = "dirichlet"
-val = 200
-run_uid = "avg-cr25-cl10-lep1-d200"
+val = 0.25
+run_uid = "avg-cr25-cl10-lep1-d0.25"

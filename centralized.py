@@ -228,15 +228,14 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
     # loop over epochs
     for epoch in tqdm(range(1, num_epochs + 1)):
         for i, filepath in enumerate(train_files_list[:size]):
-            if i > size-4:
+            if i > size-7:
                 break
-            if i % 4 == 0:
+            if i % 7 == 0:
                 datasets = []
-                gap = 4 if len(train_files_list[:size])-4 >= i else len(train_files_list[:size])-i
+                gap = 7 if len(train_files_list[:size])-7 >= i else len(train_files_list[:size])-i
                 for j in range(gap):
                     # build data loaders
                     path_to_h5_train, path_to_csv_train = train_files_list[i+j], 'data/code15-12l/exams.csv' # path_to_records = 'data/codesubset/RECORDS.txt'
-                
                     # load traces
                     f = h5py.File(path_to_h5_train, 'r')
                     traces = torch.tensor(np.array(f['tracings'], dtype=np.float32), dtype=torch.float32)[:-1,:,:]
@@ -258,9 +257,20 @@ def main(num_rounds, num_chunks, learning_rate=1e-4, weight_decay=0, batch_size=
                     datasets.append(TensorDataset(traces, labels))
                 
                 # load dataset
-                dataset = ConcatDataset(datasets)
+                conc = ConcatDataset(datasets)
+                print(len(conc))
+                dataset, _ = random_split(conc, [70000, int(len(conc)-70000)])
                 tloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset, shuffle=True))
-            
+                pos = 0
+                neg = 0
+                for x,y in dataset:
+                    if y[0] == 0:
+                        pos += 1
+                    else:
+                        neg += 1
+                print(pos/neg)
+                #print(len(y[y[0]==0])/len(y[y[0]==1]))
+
                 # training loop
                 train_loss = train_loop(epoch, filepath.replace("data/code15-12l/", ""), tloader, model, optimizer, loss_function, device=gpu_id, snapshot_path=snapshot_path)
 
@@ -381,7 +391,7 @@ if __name__ == "__main__":
     parser.add_argument("-bs", "--batch_size", type=int, default=256)
     parser.add_argument("-ep", "--epochs", type=int, default=20)
     args = parser.parse_args()
-    main(num_rounds=args.epochs, num_chunks=-1, 
+    main(num_rounds=args.epochs, num_chunks=13, 
         learning_rate=args.learning_rate, 
         weight_decay=args.weight_decay, 
         batch_size=args.batch_size, 
