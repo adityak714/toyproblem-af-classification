@@ -5,9 +5,15 @@ from matplotlib import pyplot as plt
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg, FedProx
+from flwr.server.client_manager import SimpleClientManager
 from datetime import date
 from pytorchexample.task import ResNet1d, load_centralized_dataset, load_datasets, test
 from sklearn.metrics import average_precision_score, PrecisionRecallDisplay
+
+###################### SCAFFOLD imports
+from pytorchexample.server_scaffold import ScaffoldServer, ScaffoldStrategy
+from pytorchexample.client_scaffold import gen_client_fn
+######################
 
 # Create ServerApp
 app = ServerApp()
@@ -19,6 +25,7 @@ stratname = ''
 def main(grid: Grid, context: Context) -> None:
     """Main entry point for the ServerApp."""
     # Read run config
+    num_partitions: int = context.run_config["num-partitions"]
     fraction_evaluate: float = context.run_config["fraction-evaluate"]
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["learning-rate"]
@@ -37,6 +44,8 @@ def main(grid: Grid, context: Context) -> None:
     global_model = ResNet1d(n_classes=1)
     arrays = ArrayRecord(global_model.state_dict())
 
+    client_fn = None
+    client_cv_dir = None
     strategy = None
 
     # Initialize FedPROX strategy (before: FEDAVG)
@@ -45,38 +54,73 @@ def main(grid: Grid, context: Context) -> None:
         strategy = FedProx(fraction_evaluate=fraction_evaluate, proximal_mu=proxmu) 
         stratname = f'fedprox{proxmu}'
     elif stratname == 'scaffold':
-        pass # stratname = 'Scaffold{...}'
+        client_cv_dir = f"runs/{today}-{unique_id}"
+        print("Local cvs for scaffold clients are saved to: ", client_cv_dir)
     else:
         strategy = FedAvg(fraction_evaluate=fraction_evaluate) 
 
     with open(f'runs/{today}-{unique_id}/{stratname}.txt', 'a'): 
         pass
 
-    try:
-        # Start strategy, run FedAvg for `num_rounds`
-        result = strategy.start(
-            grid=grid,
-            initial_arrays=arrays,
-            train_config=ConfigRecord({"lr": lr}),
-            num_rounds=num_rounds,
-            evaluate_fn=global_evaluate,
+    if stratname == 'scaffold':
+        evaluate_fn = global_evaluate(
+            server_round=1,
+            arrays=arrays
         )
-    except KeyboardInterrupt as stopped_session:
-        with open(f'runs/{today}-{unique_id}/server-{stratname}-finished_metrics.txt', 'w') as f:
-            f.write(str(dict(result.evaluate_metrics_serverapp)))
-        # Save final model to disk
-        print("\nSaving final model to disk...")
-        state_dict = result.arrays.to_torch_state_dict()
-        torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt")
-        os.remove(f"tmp{context.run_config['run_uid']}.txt")
-
-    with open(f'runs/{today}-{unique_id}/server-{stratname}-finished_metrics.txt', 'w') as f:
-        f.write(str(dict(result.evaluate_metrics_serverapp)))
-    # Save final model to disk
-    print("\nSaving final model to disk...")
-    state_dict = result.arrays.to_torch_state_dict()
-    torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt") # TODO: may need to save nn.Module instead of state_dict
-    os.remove(f"tmp{context.run_config['run_uid']}.txt")
+        strategy = ScaffoldStrategy(evaluate_fn=evaluate_fn)
+        server = ScaffoldServer(
+            strategy=strategy, 
+            model=arrays, 
+            client_manager=SimpleClientManager()
+        )
+        client_fn = gen_client_fn(#trainloaders, valloaders,
+            model=arrays,
+            client_cv_dir=client_cv_dir
+        )
+        
+        history = flwr.simulation.start_simulation(
+            server=server,
+            client_fn=client_fn,
+            num_clients=num_partitions,
+            config=flwr.server.ServerConfig(num_rounds=num_rounds),
+            client_resources={
+                "num_cpus": 32,
+                "num_gpus": 1.0,
+            },
+            strategy=strategy,
+            ray_init_args={
+                "address": "auto"
+            }
+        )
+        print(history)
+        with open(f"runs/{today}-{unique_id}/{stratname}-cl{num_partitions}.pkl", "wb") as f_ptr:
+            pickle.dump(history, f_ptr)
+    else:
+        try:
+            # Start strategy, run FedAvg for `num_rounds`
+            result = strategy.start(
+                grid=grid,
+                initial_arrays=arrays,
+                train_config=ConfigRecord({"lr": lr}),
+                num_rounds=num_rounds,
+                evaluate_fn=global_evaluate,
+            )
+        except KeyboardInterrupt as stopped_session:
+            with open(f'runs/{today}-{unique_id}/server-{stratname}-finished_metrics.txt', 'w') as f:
+                f.write(str(dict(result.evaluate_metrics_serverapp)))
+            # Save final model to disk
+            print("\nSaving final model to disk...")
+            state_dict = result.arrays.to_torch_state_dict()
+            torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt")
+            os.remove(f"tmp{context.run_config['run_uid']}.txt")
+        finally:
+            with open(f'runs/{today}-{unique_id}/server-{stratname}-finished_metrics.txt', 'w') as f:
+                f.write(str(dict(result.evaluate_metrics_serverapp)))
+            # Save final model to disk
+            print("\nSaving final model to disk...")
+            state_dict = result.arrays.to_torch_state_dict()
+            torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt") # TODO: may need to save nn.Module instead of state_dict
+            os.remove(f"tmp{context.run_config['run_uid']}.txt")
 
 def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
     """Evaluate model on central data."""

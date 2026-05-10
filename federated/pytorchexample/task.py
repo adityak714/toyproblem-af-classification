@@ -399,7 +399,7 @@ def train_fedavg(config) -> None:
     #trainloader = ray.train.torch.prepare_data_loader(trainloader)
     print("****** CUDA DEVICES:", torch.cuda.device_count())
     device = torch.device(f"cuda:{partition_id % torch.cuda.device_count()}")
-    pos_weight = torch.tensor([61], device=device)
+    pos_weight = torch.tensor([62], device=device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = AdamW(net.parameters(), lr=learning_rate, weight_decay=weight_decay) #,weight_decay=weight_decay)
 
@@ -414,25 +414,8 @@ def train_fedavg(config) -> None:
 
     loss = 0
     for i in range(epochs):
-        #if ray.train.get_context().get_world_size() > 1:
-        #    trainloader.sampler.set_epoch(i)
         loss, model = _train_one_epoch(net, device, trainloader, criterion, optimizer, i)
-        #with tempfile.TemporaryDirectory() as temp_checkpoint_dir:
-        #    torch.save(model.module.state_dict(), os.path.join(temp_checkpoint_dir, "model.pt"))
-        #    ray.train.report(
-        #        {
-        #            "loss": loss, 
-        #            "epoch": i, 
-        #            "partition_id": partition_id,
-        #            "trainloader_size": len(trainloader)
-        #        },
-        #        checkpoint=ray.train.Checkpoint.from_directory(temp_checkpoint_dir),
-        #    )
-        #if ray.train.get_context().get_world_rank() == 0:
-        #    print(metrics)
 
-    # -- END MULTIGPU PROCESS --
-    # destroy_process_group()
     return loss, model, count
 
 def _train_one_epoch(
@@ -475,6 +458,7 @@ def test(net, testloader: DataLoader, device) -> Tuple[float, float]: # == rank 
     net.to(device)
 
     net.eval()
+    pos_weight = torch.tensor([62], device=device)
     criterion = nn.BCEWithLogitsLoss() # nn.CrossEntropyLoss(reduction="sum")
     sigmoid = nn.Sigmoid().to(device)
 
@@ -498,91 +482,45 @@ def test(net, testloader: DataLoader, device) -> Tuple[float, float]: # == rank 
     ap = np.mean(avg_precisions)
     return loss, ap
 
-def train_scaffold(
-    net: nn.Module,
-    trainloader: DataLoader,
-    device: torch.device,
-    epochs: int,
-    learning_rate: float,
-    momentum: float,
-    weight_decay: float,
-    server_cv: torch.Tensor,
-    client_cv: torch.Tensor,
-) -> None:
+def train_scaffold(config, server_cv: torch.Tensor, client_cv: torch.Tensor) -> None:
+    # pylint: disable=too-many-arguments
+    """Train the network on the training set using FedAvg."""
+    net = config["net"]
+    partition_id = config["partition_id"]
+    trainloader = config["trainloader"]
+    valloader = config["valloader"]
+    epochs = config["epochs"]
+    learning_rate = config["lr"]
+    batch_size = config["batch_size"]
+    momentum = 0
+    weight_decay = 0.01
+
     # pylint: disable=too-many-arguments
     print("****** CUDA DEVICES:", torch.cuda.device_count())
     device = torch.device(f"cuda:{partition_id % torch.cuda.device_count()}")
-    pos_weight = torch.tensor([61], device=device)
+    pos_weight = torch.tensor([62], device=device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = ScaffoldOptimizer(
         net.parameters(), learning_rate, momentum, weight_decay
     )
     
-    # pylint: disable=too-many-arguments
-    """Train the network on the training set using FedAvg."""
-    net = config["net"] # ray.train.torch.prepare_model(net)
-    partition_id = config["partition_id"]
-    num_partitions = config["num_partitions"]
-    batch_size = config["batch_size"]
-    partitioning = config["partitioning"]
-    val = config["val"]
-    epochs = config["epochs"]
-    learning_rate = config["lr"]
-    momentum = 0
-    weight_decay = 0.01
-
-    #trainloader = ray.train.torch.prepare_data_loader(trainloader)
-    print("****** CUDA DEVICES:", torch.cuda.device_count())
-    device = torch.device(f"cuda:{partition_id % torch.cuda.device_count()}")
-    pos_weight = torch.tensor([61], device=device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    optimizer = AdamW(net.parameters(), lr=learning_rate, weight_decay=weight_decay) #,weight_decay=weight_decay)
-
-    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    # model.to(device)
-    # model = DDP(model, device_ids=[device])
     count = 0
-    trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size, partitioning=partitioning, val=val, device=device)
+    
     for _ in enumerate(trainloader):
         count += 1
     print("****** CLIENT: ", partition_id, "BATCH SIZE:", batch_size, "DATA SIZE:", count)
 
     loss = 0
-    for i in range(epochs):
-        #if ray.train.get_context().get_world_size() > 1:
-        #    trainloader.sampler.set_epoch(i)
-        loss, model = _train_one_epoch(net, device, trainloader, criterion, optimizer, i)
-        #with tempfile.TemporaryDirectory() as temp_checkpoint_dir:
-        #    torch.save(model.module.state_dict(), os.path.join(temp_checkpoint_dir, "model.pt"))
-        #    ray.train.report(
-        #        {
-        #            "loss": loss, 
-        #            "epoch": i, 
-        #            "partition_id": partition_id,
-        #            "trainloader_size": len(trainloader)
-        #        },
-        #        checkpoint=ray.train.Checkpoint.from_directory(temp_checkpoint_dir),
-        #    )
-        #if ray.train.get_context().get_world_rank() == 0:
-        #    print(metrics)
-
-    # -- END MULTIGPU PROCESS --
-    # destroy_process_group()
-    return loss, model, count
-    
-    
-    
-    
-    net.train()
     for _ in range(epochs):
-        net = _train_one_epoch_scaffold(
+        loss, net = _train_one_epoch_scaffold(
             net, trainloader, device, criterion, optimizer, server_cv, client_cv
         )
+    return loss, net, count
 
 def _train_one_epoch_scaffold(
     net: nn.Module,
     trainloader: DataLoader,
-    device: torch.device,
+    device,
     criterion: nn.Module,
     optimizer: ScaffoldOptimizer,
     server_cv: torch.Tensor,
@@ -590,11 +528,26 @@ def _train_one_epoch_scaffold(
 ) -> nn.Module:
     # pylint: disable=too-many-arguments
     """Train the network on the training set for one epoch."""
-    for data, target in trainloader:
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = net(data)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step_custom(server_cv, client_cv)
-    return net
+    net.to(device)
+    tqdm.write("Training model...")
+    train_pbar = tqdm(trainloader, desc="Training SCAFFOLD ...", leave=True)
+    total_loss, n_entries = 0, 0
+
+    net.train()
+    for traces, diagnoses in train_pbar:
+        traces, diagnoses = traces.to(device), diagnoses.to(device)
+        for x, y in trainloader:
+            x, y = x.to(device), y[:,0].reshape(-1,1).to(device)
+            optimizer.zero_grad()
+            pred = net(x)
+            curr_loss = criterion(pred, y)
+            curr_loss.backward()
+            optimizer.step_custom(server_cv, client_cv)
+        
+        total_loss += curr_loss.detach().cpu().numpy()
+        n_entries += len(traces)
+        
+        train_pbar.set_postfix({'loss': total_loss/n_entries})
+    train_pbar.close()
+
+    return float(total_loss/n_entries), net

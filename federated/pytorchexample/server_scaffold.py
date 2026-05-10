@@ -33,8 +33,8 @@ from flwr.server.strategy import Strategy
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
-
-from niid_bench.models import test
+from flwr.serverapp.strategy import FedAvg
+from pytorchexample.task import test
 
 FitResultsAndFailures = Tuple[
     List[Tuple[ClientProxy, FitRes]],

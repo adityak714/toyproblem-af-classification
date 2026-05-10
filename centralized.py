@@ -391,7 +391,7 @@ if __name__ == "__main__":
     parser.add_argument("-bs", "--batch_size", type=int, default=256)
     parser.add_argument("-ep", "--epochs", type=int, default=20)
     args = parser.parse_args()
-    main(num_rounds=args.epochs, num_chunks=13, 
+    main(num_rounds=args.epochs, num_chunks=14, 
         learning_rate=args.learning_rate, 
         weight_decay=args.weight_decay, 
         batch_size=args.batch_size, 
