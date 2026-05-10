@@ -30,11 +30,12 @@ from flwr.server import Server
 from flwr.server.client_manager import ClientManager, SimpleClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import Strategy
-from hydra.utils import instantiate
+#from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from flwr.serverapp.strategy import FedAvg
 from pytorchexample.task import test
+from pytorchexample.resnet import ResNet1d
 
 FitResultsAndFailures = Tuple[
     List[Tuple[ClientProxy, FitRes]],
@@ -46,7 +47,7 @@ class ScaffoldStrategy(FedAvg):
 
     def aggregate_fit(
         self,
-        server_round: int,
+        #server_round: int,
         results: List[Tuple[ClientProxy, FitRes]],
         failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
@@ -86,8 +87,8 @@ class ScaffoldStrategy(FedAvg):
         if self.fit_metrics_aggregation_fn:
             fit_metrics = [(res.num_examples, res.metrics) for _, res in results]
             metrics_aggregated = self.fit_metrics_aggregation_fn(fit_metrics)
-        elif server_round == 1:  # Only log this warning once
-            log(WARNING, "No fit_metrics_aggregation_fn provided")
+        #elif server_round == 1:  # Only log this warning once
+        #    log(WARNING, "No fit_metrics_aggregation_fn provided")
 
         return (
             ndarrays_to_parameters(parameters_aggregated + aggregated_cv_update),
@@ -100,13 +101,13 @@ class ScaffoldServer(Server):
     def __init__(
         self,
         strategy: Strategy,
-        model: DictConfig,
+        model,
         client_manager: Optional[ClientManager] = None,
     ):
         if client_manager is None:
             client_manager = SimpleClientManager()
         super().__init__(client_manager=client_manager, strategy=strategy)
-        self.model_params = instantiate(model)
+        self.model_params = ResNet1d(n_classes=1)
         self.server_cv: List[torch.Tensor] = []
 
     def _get_initial_parameters(self, timeout: Optional[float]) -> Parameters:

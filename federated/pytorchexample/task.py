@@ -14,8 +14,6 @@ from torch.utils.data import DataLoader, TensorDataset, Subset, random_split, Co
 from flwr.common import Scalar, Context
 from typing import Callable, Dict, List, OrderedDict, Union, Optional, Tuple
 from pytorchexample.resnet import ResNet1d
-import ray.train.torch
-import ray.train
 
 fds = None  # Cache FederatedDataset
 
@@ -505,7 +503,6 @@ def train_scaffold(config, server_cv: torch.Tensor, client_cv: torch.Tensor) -> 
     )
     
     count = 0
-    
     for _ in enumerate(trainloader):
         count += 1
     print("****** CLIENT: ", partition_id, "BATCH SIZE:", batch_size, "DATA SIZE:", count)

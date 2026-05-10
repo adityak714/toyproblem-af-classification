@@ -9,7 +9,7 @@ from flwr.common import Scalar
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
-
+from pytorchexample.resnet import ResNet1d
 from pytorchexample.task import test, train_scaffold, load_datasets
 
 # pylint: disable=too-many-instance-attributes
@@ -143,8 +143,8 @@ def gen_client_fn(
     client_cv_dir: str,
     num_epochs: int,
     learning_rate: float,
-    momentum: float = 0.9,
-    weight_decay: float = 0.0,
+    momentum: float = 0,
+    weight_decay: float = 0.01,
 ) -> Callable[[str], FlowerClientScaffold]:  
     # pylint: disable=too-many-arguments
     
@@ -152,11 +152,14 @@ def gen_client_fn(
         """Create a Flower client representing a single organization."""
         # Load model
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        net.to(device)
+        
+        model = ResNet1d(n_classes=1)
+        model.load_state_dict(net.to_torch_state_dict())
+        model.to(device)
         
         return FlowerClientScaffold(
             int(cid),
-            net,
+            model,
             num_partitions,
             batch_size,
             val,

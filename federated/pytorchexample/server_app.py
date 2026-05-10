@@ -1,13 +1,14 @@
 """pytorchexample: A Flower / PyTorch app."""
 
-import torch, os, uuid, json, glob, h5py, numpy as np, pandas as pd
+import flwr, torch, os, uuid, json, glob, h5py, numpy as np, pandas as pd
 from matplotlib import pyplot as plt
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg, FedProx
 from flwr.server.client_manager import SimpleClientManager
 from datetime import date
-from pytorchexample.task import ResNet1d, load_centralized_dataset, load_datasets, test
+from pytorchexample.resnet import ResNet1d
+from pytorchexample.task import load_centralized_dataset, load_datasets, test
 from sklearn.metrics import average_precision_score, PrecisionRecallDisplay
 
 ###################### SCAFFOLD imports
@@ -29,7 +30,10 @@ def main(grid: Grid, context: Context) -> None:
     fraction_evaluate: float = context.run_config["fraction-evaluate"]
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["learning-rate"]
+    batch_size: int = context.run_config["batch-size"]
     stratname = context.run_config["strategy"]
+    val = context.run_config["val"] # alpha value for dirichl-based partitioning
+    local_epochs: int = context.run_config["local-epochs"]
     
     os.environ["CURR_FLWR_SESSION_ID"] = unique_id
     with open(f"tmp{context.run_config['run_uid']}.txt", 'w') as f:
@@ -67,16 +71,19 @@ def main(grid: Grid, context: Context) -> None:
             server_round=1,
             arrays=arrays
         )
-        strategy = ScaffoldStrategy(evaluate_fn=evaluate_fn)
+        strategy = ScaffoldStrategy()
         server = ScaffoldServer(
             strategy=strategy, 
             model=arrays, 
             client_manager=SimpleClientManager()
         )
-        client_fn = gen_client_fn(#trainloaders, valloaders,
-            model=arrays,
-            client_cv_dir=client_cv_dir
-        )
+        client_fn = gen_client_fn(
+            arrays,
+            num_partitions,
+            batch_size,
+            val, # alpha --- dirichlet-iid-non-iid partitioning
+            client_cv_dir,
+            local_epochs, lr)
         
         history = flwr.simulation.start_simulation(
             server=server,
