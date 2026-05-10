@@ -47,7 +47,7 @@ class ScaffoldStrategy(FedAvg):
 
     def aggregate_fit(
         self,
-        #server_round: int,
+        server_round: int,
         results: List[Tuple[ClientProxy, FitRes]],
         failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
@@ -124,7 +124,7 @@ class ScaffoldServer(Server):
         log(INFO, "Requesting initial parameters from one random client")
         random_client = self._client_manager.sample(1)[0]
         ins = GetParametersIns(config={})
-        get_parameters_res = random_client.get_parameters(ins=ins, timeout=timeout)
+        get_parameters_res = random_client.get_parameters(ins=ins, timeout=timeout, group_id=None)
         log(INFO, "Received initial parameters from one random client")
         self.server_cv = [
             torch.from_numpy(t)
