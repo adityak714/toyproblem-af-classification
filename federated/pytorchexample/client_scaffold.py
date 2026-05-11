@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, OrderedDict
 
 import flwr as fl
 import torch
-from flwr.common import Scalar
+from flwr.common import Context, Scalar
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
@@ -46,15 +46,8 @@ class FlowerClientScaffold(fl.client.NumPyClient):
         self.client_cv = []
         
         # load_datasets
-        trainloader, valloader = load_datasets(
-            self.cid, 
-            self.num_partitions, 
-            self.batch_size,
-            partitioning="dirichlet",
-            val=self.val, device=self.device
-        )
-        self.trainloader = trainloader
-        self.valloader = valloader
+        self.trainloader = None
+        self.valloader = None
         
         for param in self.net.parameters():
             self.client_cv.append(torch.zeros(param.shape))
@@ -100,7 +93,8 @@ class FlowerClientScaffold(fl.client.NumPyClient):
             self.client_cv = torch.load(f"{self.dir}/client_cv_{self.cid}.pt")
         # convert the server control variate to a list of tensors
         server_cv = [torch.Tensor(cv) for cv in server_cv]
-
+ 
+        print(f"[client {self.cid}] starting train_scaffold with {len(trainloader)} batches")
         train_scaffold({
                 "net": self.net,
                 "partition_id": self.cid,
@@ -113,6 +107,7 @@ class FlowerClientScaffold(fl.client.NumPyClient):
             server_cv,
             self.client_cv,
         )
+        print("training done!")
         x = parameters
         y_i = self.get_parameters(config={})
         c_i_n = []
@@ -143,6 +138,17 @@ class FlowerClientScaffold(fl.client.NumPyClient):
     def evaluate(self, parameters, config: Dict[str, Scalar]):
         """Evaluate using given parameters."""
         self.set_parameters(parameters)
+        
+        trainloader, valloader = load_datasets(
+            self.cid, 
+            self.num_partitions, 
+            self.batch_size,
+            partitioning="dirichlet",
+            val=self.val, device=self.device
+        )
+        self.trainloader = trainloader
+        self.valloader = valloader
+
         loss, acc = test(self.net, self.valloader, self.device)
         return float(loss), len(self.valloader.dataset), {"accuracy": float(acc)}
 
@@ -158,12 +164,14 @@ def gen_client_fn(
     learning_rate: float,
     momentum: float = 0,
     weight_decay: float = 0.01,
-) -> Callable[[str], FlowerClientScaffold]:  
+    ) -> Callable[[Context], fl.client.Client]:
+    # -> Callable[[str], FlowerClientScaffold]:  
     # pylint: disable=too-many-arguments
     
-    def client_fn(cid: str) -> FlowerClientScaffold:
+    def client_fn(context: Context):
         """Create a Flower client representing a single organization."""
         # Load model
+        cid = int(context.node_config.get("partition-id", context.node_id))
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         model = ResNet1d(n_classes=1)
@@ -171,7 +179,7 @@ def gen_client_fn(
         model.to(device)
         
         return FlowerClientScaffold(
-            int(cid),
+            cid,
             model,
             num_partitions,
             batch_size,
@@ -182,6 +190,6 @@ def gen_client_fn(
             momentum,
             weight_decay,
             save_dir=client_cv_dir,
-        )
+        ).to_client()
 
     return client_fn

@@ -531,20 +531,20 @@ def _train_one_epoch_scaffold(
     total_loss, n_entries = 0, 0
 
     net.train()
-    for traces, diagnoses in train_pbar:
-        traces, diagnoses = traces.to(device), diagnoses.to(device)
-        for x, y in trainloader:
-            x, y = x.to(device), y[:,0].reshape(-1,1).to(device)
-            optimizer.zero_grad()
-            pred = net(x)
-            curr_loss = criterion(pred, y)
-            curr_loss.backward()
-            optimizer.step_custom(server_cv, client_cv)
+    #for traces, diagnoses in train_pbar:
+    #    traces, diagnoses = traces.to(device), diagnoses.to(device)
+    for x, y in trainloader:
+        x, y = x.to(device), y[:,0].reshape(-1,1).to(device)
+        optimizer.zero_grad()
+        pred = net(x)
+        curr_loss = criterion(pred, y)
+        curr_loss.backward()
+        optimizer.step_custom(server_cv, client_cv)
         
         total_loss += curr_loss.detach().cpu().numpy()
-        n_entries += len(traces)
+        n_entries += len(x)
         
-        train_pbar.set_postfix({'loss': total_loss/n_entries})
-    train_pbar.close()
+        #train_pbar.set_postfix({'loss': total_loss/n_entries})
+        #train_pbar.close()
 
     return float(total_loss/n_entries), net

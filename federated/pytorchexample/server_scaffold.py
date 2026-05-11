@@ -14,6 +14,7 @@ from flwr.common import (
     ndarrays_to_parameters,
     parameters_to_ndarrays,
 )
+from flwr.server.strategy.aggregate import aggregate
 from flwr.common.logger import log
 from typing import Dict, List, Union, Optional, Tuple
 from flwr.common.typing import (
@@ -118,6 +119,10 @@ class ScaffoldServer(Server):
         )
         if parameters is not None:
             log(INFO, "Using initial parameters provided by strategy")
+            self.server_cv = [
+                torch.zeros_like(torch.from_numpy(t))
+                for t in parameters_to_ndarrays(parameters)
+            ]
             return parameters
 
         # Get initial parameters from one of the clients
@@ -127,7 +132,7 @@ class ScaffoldServer(Server):
         get_parameters_res = random_client.get_parameters(ins=ins, timeout=timeout, group_id=None)
         log(INFO, "Received initial parameters from one random client")
         self.server_cv = [
-            torch.from_numpy(t)
+            torch.zeros_like(torch.from_numpy(t))
             for t in parameters_to_ndarrays(get_parameters_res.parameters)
         ]
         return get_parameters_res.parameters

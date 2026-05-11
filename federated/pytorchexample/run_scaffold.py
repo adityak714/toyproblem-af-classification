@@ -18,27 +18,24 @@ from pytorchexample.server_scaffold import ScaffoldServer, ScaffoldStrategy
 from pytorchexample.client_scaffold import gen_client_fn
 ######################
 
-# Create ServerApp
-app = ServerApp()
 today = date.today()
 unique_id = str(uuid.uuid4())
 stratname = ''
 
-@app.main()
-def main(grid: Grid, context: Context) -> None:
+def main() -> None:
     """Main entry point for the ServerApp."""
     # Read run config
-    num_partitions: int = context.run_config["num-partitions"]
-    fraction_evaluate: float = context.run_config["fraction-evaluate"]
-    num_rounds: int = context.run_config["num-server-rounds"]
-    lr: float = context.run_config["learning-rate"]
-    batch_size: int = context.run_config["batch-size"]
-    stratname = context.run_config["strategy"]
-    val = context.run_config["val"] # alpha value for dirichl-based partitioning
-    local_epochs: int = context.run_config["local-epochs"]
+    num_partitions: int = 10 #context.run_config["num-partitions"]
+    fraction_evaluate: float = 0.5 #context.run_config["fraction-evaluate"]
+    num_rounds: int = 1 #context.run_config["num-server-rounds"]
+    lr: float = 0.0001 #context.run_config["learning-rate"]
+    batch_size: int = 256 #context.run_config["batch-size"]
+    stratname = "scaffold" #context.run_config["strategy"]
+    val = 0.25 #context.run_config["val"] # alpha value for dirichl-based partitioning
+    local_epochs: int = 1 #context.run_config["local-epochs"]
     
     os.environ["CURR_FLWR_SESSION_ID"] = unique_id
-    with open(f"tmp{context.run_config['run_uid']}.txt", 'w') as f:
+    with open(f"tmp-tester-scaffold.txt", 'w') as f:
         print("CURR_FLWR_SESSION_ID set as", os.environ["CURR_FLWR_SESSION_ID"])
         filetree = f"./runs/{today}-{unique_id}"
         f.write(filetree)
@@ -50,7 +47,6 @@ def main(grid: Grid, context: Context) -> None:
     global_model = ResNet1d(n_classes=1)
     arrays = ArrayRecord(global_model.state_dict())
 
-    client_fn = None
     client_cv_dir = None
     strategy = None
 
@@ -107,32 +103,7 @@ def main(grid: Grid, context: Context) -> None:
         print(history)
         with open(f"runs/{today}-{unique_id}/{stratname}-cl{num_partitions}.pkl", "wb") as f_ptr:
             pickle.dump(history, f_ptr)
-    else:
-        try:
-            # Start strategy, run FedAvg for `num_rounds`
-            result = strategy.start(
-                grid=grid,
-                initial_arrays=arrays,
-                train_config=ConfigRecord({"lr": lr}),
-                num_rounds=num_rounds,
-                evaluate_fn=global_evaluate,
-            )
-        except KeyboardInterrupt as stopped_session:
-            with open(f'runs/{today}-{unique_id}/server-{stratname}-finished_metrics.txt', 'w') as f:
-                f.write(str(dict(result.evaluate_metrics_serverapp)))
-            # Save final model to disk
-            print("\nSaving final model to disk...")
-            state_dict = result.arrays.to_torch_state_dict()
-            torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt")
-            os.remove(f"tmp{context.run_config['run_uid']}.txt")
-        finally:
-            with open(f'runs/{today}-{unique_id}/server-{stratname}-finished_metrics.txt', 'w') as f:
-                f.write(str(dict(result.evaluate_metrics_serverapp)))
-            # Save final model to disk
-            print("\nSaving final model to disk...")
-            state_dict = result.arrays.to_torch_state_dict()
-            torch.save(state_dict, f"runs/{today}-{unique_id}/final_model.pt") # TODO: may need to save nn.Module instead of state_dict
-            os.remove(f"tmp{context.run_config['run_uid']}.txt")
+ 
 
 def scaffold_global_evaluate(server_round: int, parameters, config):
     model = ResNet1d(n_classes=1)
@@ -183,7 +154,7 @@ def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
             plt.title(f"PR-Curve on Annotated ECG Dataset - {test_subset}.png")
             plt.savefig(f"runs/{today}-{unique_id}/prCODEtest-{test_subset}.png", dpi=300)
             plt.close()
-           
+            
             # add to dictionary storing all holdout scores
             scores[test_subset] = score
 
@@ -201,3 +172,6 @@ def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
 
     # Return the evaluation metrics
     return record
+
+if __name__ == "__main__":
+    main()
