@@ -319,6 +319,8 @@ def _train_one_epoch(
     train_pbar = tqdm(trainloader, desc="Training Epoch {epoch:2d}".format(epoch=epoch), leave=True)
     total_loss, n_entries = 0, 0
     # trainloader.sampler.set_epoch(epoch)
+    if global_params is not None:
+        print("#### USING FEDPROX with mu=", proximal_mu, " length of global_params", len(global_params))
 
     net.train()
     for traces, diagnoses in train_pbar:
@@ -330,8 +332,9 @@ def _train_one_epoch(
             if global_params is not None: ### FEDPROX
                 proximal_term = 0.0
                 for local_weights, global_weights in zip(net.parameters(), global_params, strict=True):
-                    proximal_term += torch.square((local_weights - global_weights).norm(2))
-    
+                    #print(local_weights.device, global_weights.device)
+                    proximal_term += torch.square((local_weights.cpu() - global_weights).norm(2))
+                
                 curr_loss = criterion(pred, y) + (proximal_mu / 2) * proximal_term
             else:                         ### FEDAVG
                 curr_loss = criterion(pred, y)
