@@ -145,12 +145,12 @@ def scaffold_global_evaluate(server_round: int, parameters, config):
     with open(f'runs/{today}-{unique_id}/holdoutmetrics-CODETEST.txt', 'a') as f:
         f.write(f"{scores}\n")
 
-    torch.save({
-        "MODEL_STATE": arrays.to_torch_state_dict(),
-        "COMM_ROUND": server_round
-    }, f'runs/{today}-{unique_id}/fl-globmod-snapshot.pt')
+    #torch.save({
+    #    "MODEL_STATE": arrays.to_torch_state_dict(),
+    #    "COMM_ROUND": server_round
+    #}, f'runs/{today}-{unique_id}/fl-globmod-snapshot.pt')
 
-    record = MetricRecord({"comm_round": server_round, "serveragg_avg_prec": test_acc, "serveragg_loss": test_loss})
+    record = {"comm_round": server_round, "serveragg_avg_prec": test_acc, "serveragg_loss": test_loss}
     with open(f'runs/{today}-{unique_id}/serveragg-metrics.txt', 'a') as f:
         f.write(f"{dict(record)}\n") 
     

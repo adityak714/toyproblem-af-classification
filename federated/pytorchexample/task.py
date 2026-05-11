@@ -279,6 +279,7 @@ def train_fedavg(config) -> None:
     val = config["val"]
     epochs = config["epochs"]
     learning_rate = config["lr"]
+    proximal_mu = config["proxmu"] # will be zero if strategy == "fedavg", handled in client_app.py
     momentum = 0
     weight_decay = 0.01
 
@@ -289,18 +290,16 @@ def train_fedavg(config) -> None:
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = AdamW(net.parameters(), lr=learning_rate, weight_decay=weight_decay) #,weight_decay=weight_decay)
 
-    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    # model.to(device)
-    # model = DDP(model, device_ids=[device])
     count = 0
     trainloader, valloader = load_datasets(partition_id, num_partitions, batch_size, partitioning=partitioning, val=val, device=device)
     for _ in enumerate(trainloader):
         count += 1
-    print("****** CLIENT: ", partition_id, "BATCH SIZE:", batch_size, "DATA SIZE:", count)
 
     loss = 0
+    global_params = [val.detach().clone() for val in net.parameters()] if proximal_mu > 0.0 else None # will be empty if strategy == "fedavg"
+    
     for i in range(epochs):
-        loss, model = _train_one_epoch(net, device, trainloader, criterion, optimizer, i)
+        loss, model = _train_one_epoch(net, device, trainloader, criterion, optimizer, i, proximal_mu=proximal_mu, global_params=global_params)
 
     return loss, model, count
 
@@ -310,7 +309,9 @@ def _train_one_epoch(
     trainloader: DataLoader,
     criterion: nn.Module,
     optimizer: Optimizer,
-    epoch: int
+    epoch: int,
+    proximal_mu: float = 0.0, # if this is zero, or not passed, then it is simply FedAvg
+    global_params = None
 ) -> nn.Module:
     """Train the network on the training set for one epoch."""
     net.to(rank)
@@ -325,8 +326,15 @@ def _train_one_epoch(
         for x, y in trainloader:
             x, y = x.to(rank), y[:,0].reshape(-1,1).to(rank)
             pred = net(x)
-            #print(pred.get_device(), y.get_device())
-            curr_loss = criterion(pred, y)
+            ####### DEPENDING ON IF FEDAVG OR FEDPROX #######
+            if global_params is not None: ### FEDPROX
+                proximal_term = 0.0
+                for local_weights, global_weights in zip(net.parameters(), global_params, strict=True):
+                    proximal_term += torch.square((local_weights - global_weights).norm(2))
+    
+                curr_loss = criterion(pred, y) + (proximal_mu / 2) * proximal_term
+            else:                         ### FEDAVG
+                curr_loss = criterion(pred, y)
             curr_loss.backward()
             optimizer.step()
             optimizer.zero_grad()

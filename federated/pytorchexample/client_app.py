@@ -34,7 +34,8 @@ def train(msg: Message, context: Context):
         "val": context.run_config["val"],
         "epochs": context.run_config["local-epochs"], 
         "lr": msg.content["config"]["lr"], 
-        "batch_size": context.run_config["batch-size"]
+        "batch_size": context.run_config["batch-size"],
+        "proxmu": context.run_config["proxmu"] if context.run_config["strategy"] == 'fedprox' else 0.0
     })
     end_time = time.time()
 

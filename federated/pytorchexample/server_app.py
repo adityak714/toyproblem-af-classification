@@ -29,6 +29,7 @@ def main(grid: Grid, context: Context) -> None:
     """Main entry point for the ServerApp."""
     # Read run config
     num_partitions: int = context.run_config["num-partitions"]
+    fraction_train: float = context.run_config["fraction-train"]
     fraction_evaluate: float = context.run_config["fraction-evaluate"]
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["learning-rate"]
@@ -57,13 +58,13 @@ def main(grid: Grid, context: Context) -> None:
     # Initialize FedPROX strategy (before: FEDAVG)
     if stratname == 'fedprox':
         proxmu = context.run_config["proxmu"]
-        strategy = FedProx(fraction_evaluate=fraction_evaluate, proximal_mu=proxmu) 
+        strategy = FedProx(fraction_train=fraction_train, fraction_evaluate=fraction_evaluate, proximal_mu=proxmu) 
         stratname = f'fedprox{proxmu}'
     elif stratname == 'scaffold':
         client_cv_dir = f"runs/{today}-{unique_id}"
         print("Local cvs for scaffold clients are saved to: ", client_cv_dir)
     else:
-        strategy = FedAvg(fraction_evaluate=fraction_evaluate) 
+        strategy = FedAvg(fraction_train=fraction_train, fraction_evaluate=fraction_evaluate) 
 
     with open(f'runs/{today}-{unique_id}/{stratname}.txt', 'a'): 
         pass
