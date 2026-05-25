@@ -19,8 +19,27 @@ from pytorchexample.dataloader import BatchDataloader
 
 fds = None  # Cache FederatedDataset
 
-class ScaffoldOptimizer(Adam):
+class ScaffoldOptimizer(SGD):
     """Implements SGD optimizer step function as defined in the SCAFFOLD paper."""
+
+    def __init__(self, params, lr, momentum=0, weight_decay=0):
+        # Base optimizer set to standard SGD as derived mathematically in SCAFFOLD
+        super().__init__(params, lr=lr, momentum=momentum, weight_decay=weight_decay)
+
+    def step_custom(self, server_cv, client_cv):
+        """Implement the custom step function for SCAFFOLD."""
+        # Standard gradient step first
+        self.step()
+        # Corrected: y_i = y_i - eta * (c - c_i)
+        for group in self.param_groups:
+            for par, s_cv, c_cv in zip(group["params"], server_cv, client_cv):
+                if par.requires_grad:
+                    # Subtract the control variate difference using the group learning rate
+                    par.data.add_(s_cv.to(par.device) - c_cv.to(par.device), alpha=-group["lr"])
+
+"""
+class ScaffoldOptimizer(Adam):
+    "Implements SGD optimizer step function as defined in the SCAFFOLD paper."
 
     def __init__(self, grads, step_size, momentum, weight_decay):
         super().__init__(
@@ -30,7 +49,7 @@ class ScaffoldOptimizer(Adam):
         )
 
     def step_custom(self, server_cv, client_cv):
-        """Implement the custom step function fo SCAFFOLD."""
+        "Implement the custom step function fo SCAFFOLD."
         # y_i = y_i - \eta * (g_i + c - c_i)  -->
         # y_i = y_i - \eta*(g_i + \mu*b_{t}) - \eta*(c - c_i)
         self.step()
@@ -38,6 +57,7 @@ class ScaffoldOptimizer(Adam):
             for par, s_cv, c_cv in zip(group["params"], server_cv, client_cv):
                 print("parameter vs. s_cv - c_cv", par.grad.norm(), (s_cv.to(par.device) - c_cv.to(par.device)).norm())
                 par.data.add_(s_cv.to(par.device) - c_cv.to(par.device), alpha=-group["lr"])
+"""
 
 def load_centralized_dataset():
     """Load entire test set (selected to be exams_part0, exams_part1, 2 and 3) and return the dataloader.""" 

@@ -29,10 +29,10 @@ def main() -> None:
     num_rounds: int = 60 #context.run_config["num-server-rounds"]
     fraction_fit: float = 1.0 #context.run_config["fraction-fit"]
     fraction_evaluate: float = 0.5 #context.run_config["fraction-evaluate"]
-    lr: float = 0.001 #context.run_config["learning-rate"]
+    lr: float = 0.002 #context.run_config["learning-rate"]
     batch_size: int = 256 #context.run_config["batch-size"]
     stratname = "scaffold" #context.run_config["strategy"]
-    val = 0.25 #context.run_config["val"] # alpha value for dirichl-based partitioning
+    val = 1.0 #context.run_config["val"] # alpha value for dirichl-based partitioning
     local_epochs: int = 5 #context.run_config["local-epochs"]
     
     os.environ["CURR_FLWR_SESSION_ID"] = unique_id
@@ -109,9 +109,11 @@ def scaffold_global_evaluate(server_round: int, parameters, config):
     #state_dict = OrderedDict({k: v for k, v in params_dict})
     #model.load_state_dict(state_dict, strict=True)
     model = ResNet1d(n_classes=1)
-    with torch.no_grad():
-        for param, array in zip(model.parameters(), parameters):
-            param.copy_(torch.as_tensor(array))
+
+    state_dict = model.state_dict()
+    for k, v in zip(state_dict.keys(), parameters):
+        state_dict[k] = torch.tensor(v, dtype=state_dict[k].dtype)
+    model.load_state_dict(state_dict, strict=True)
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)

@@ -35,68 +35,104 @@ FitResultsAndFailures = Tuple[
 class ScaffoldStrategy(FedAvg):
     """Implement custom strategy for SCAFFOLD based on FedAvg class."""
 
-    def aggregate_fit(
-        self,
-        server_round: int,
-        results: List[Tuple[ClientProxy, FitRes]],
-        failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
-    ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
+    def aggregate_fit(self, server_round: int, results, failures):
         """Aggregate fit results using weighted average."""
         if not results:
             return None, {}
-        # Do not aggregate if there are failures and failures are not accepted
         if not self.accept_failures and failures:
             return None, {}
 
-        ### TODO: Partial C
-        
-        combined_parameters_all_updates = [
-            parameters_to_ndarrays(fit_res.parameters) for _, fit_res in results
-        ]
-        len_combined_parameter = len(combined_parameters_all_updates[0])
-        num_examples_all_updates = [fit_res.num_examples for _, fit_res in results]
-        # Zip parameters and num_examples
+        # Aggregate everything seamlessly. W_i gets averaged into W_agg, Delta C_i into Delta C_agg
         weights_results = [
-            (update[: len_combined_parameter // 2], num_examples)
-            for update, num_examples in zip(
-                combined_parameters_all_updates, num_examples_all_updates
-            )
+            (parameters_to_ndarrays(fit_res.parameters), fit_res.num_examples)
+            for _, fit_res in results
         ]
-        # Aggregate parameters
-        parameters_aggregated = aggregate(weights_results)
-        """
-        param_updates = [update[0] for update in weights_results]
-        parameters_aggregated = [np.mean(layer, axis=0) for layer in zip(*param_updates)]
-        """
+        aggregated_arrays = aggregate(weights_results)
 
-        # Zip client_cv_updates and num_examples
-        client_cv_updates_and_num_examples = [
-            (update[len_combined_parameter // 2 :], num_examples)
-            for update, num_examples in zip(
-                combined_parameters_all_updates, num_examples_all_updates
-            )
-        ]
-        aggregated_cv_update = aggregate(client_cv_updates_and_num_examples)
-        """
-        cv_updates = [update[0] for update in client_cv_updates_and_num_examples]
-        aggregated_cv_update = [np.mean(layer, axis=0) for layer in zip(*cv_updates)]
-
-        """
-        # Aggregate custom metrics if aggregation fn was provided
         metrics_aggregated = {}
         if self.fit_metrics_aggregation_fn:
             fit_metrics = [(res.num_examples, res.metrics) for _, res in results]
             metrics_aggregated = self.fit_metrics_aggregation_fn(fit_metrics)
-        #elif server_round == 1:  # Only log this warning once
-        #    log(WARNING, "No fit_metrics_aggregation_fn provided")
 
-        return (
-            ndarrays_to_parameters(parameters_aggregated + aggregated_cv_update),
-            metrics_aggregated,
-        )
+        # Return the unified array block. The server will unpack it.
+        return ndarrays_to_parameters(aggregated_arrays), metrics_aggregated
 
 class ScaffoldServer(Server):
     """Implement server for SCAFFOLD."""
+
+    def __init__(self, strategy: Strategy, model, client_manager=None, global_lr: float = 1.0):
+        if client_manager is None:
+            client_manager = SimpleClientManager()
+        super().__init__(client_manager=client_manager, strategy=strategy)
+        self.model_params = ResNet1d(n_classes=1)
+        self.server_cv: List[torch.Tensor] = []
+        self.global_lr = global_lr 
+
+    def _get_initial_parameters(self, server_round: int, timeout: Optional[float]) -> Parameters:
+        """Get initial parameters and strictly scope CVs to trainable variables."""
+        parameters = self.strategy.initialize_parameters(client_manager=self._client_manager)
+        if parameters is not None:
+            log(INFO, "Using initial parameters provided by strategy")
+        else:
+            log(INFO, "Requesting initial parameters from one random client")
+            random_client = self._client_manager.sample(1)[0]
+            ins = GetParametersIns(config={})
+            get_parameters_res = random_client.get_parameters(ins=ins, timeout=timeout, group_id=server_round)
+            parameters = get_parameters_res.parameters
+
+        # CVs ONLY track gradient-requiring parameters, unlike the main weights/buffers
+        self.server_cv = [
+            torch.zeros_like(p) for p in self.model_params.parameters() if p.requires_grad
+        ]
+        return parameters
+
+    def fit_round(self, server_round: int, timeout: Optional[float]):
+        """Perform a single round of federated averaging."""
+        client_instructions = self.strategy.configure_fit(
+            server_round=server_round,
+            parameters=update_parameters_with_cv(self.parameters, self.server_cv),
+            client_manager=self._client_manager,
+        )
+
+        if not client_instructions:
+            return None
+
+        results, failures = fit_clients(
+            client_instructions=client_instructions, max_workers=self.max_workers,
+            timeout=timeout, group_id=server_round,
+        )
+
+        aggregated_result = self.strategy.aggregate_fit(server_round, results, failures)
+        if aggregated_result[0] is None:
+            return None
+        
+        aggregated_arrays = parameters_to_ndarrays(aggregated_result[0])
+
+        # Slice the payload into W (Weights/Buffers) and C (Control Variates)
+        num_state_dict = len(self.model_params.state_dict())
+        aggregated_w = aggregated_arrays[:num_state_dict]
+        aggregated_dc = aggregated_arrays[num_state_dict:]
+
+        # Global model update: x_new = x_old + global_lr * (aggregated_w - x_old)
+        curr_w = parameters_to_ndarrays(self.parameters)
+        updated_w = [x + self.global_lr * (agg_w - x) for x, agg_w in zip(curr_w, aggregated_w)]
+        parameters_updated = ndarrays_to_parameters(updated_w)
+        self.parameters = parameters_updated
+
+        # Update Server CV: c = c + (|S| / N) * aggregated_dc
+        total_clients = len(self._client_manager.all())
+        cv_multiplier = len(results) / total_clients
+        self.server_cv = [
+            cv + cv_multiplier * torch.from_numpy(dc)
+            for cv, dc in zip(self.server_cv, aggregated_dc)
+        ]
+
+        metrics_aggregated = aggregated_result[1]
+        return parameters_updated, metrics_aggregated, (results, failures)
+
+"""
+class ScaffoldServer(Server):
+    #"Implement server for SCAFFOLD."
 
     def __init__(
         self,
@@ -113,7 +149,7 @@ class ScaffoldServer(Server):
         self.global_lr = global_lr # new - for modifying a global learning rate
 
     def _get_initial_parameters(self, server_round: int, timeout: Optional[float]) -> Parameters:
-        """Get initial parameters from one of the available clients."""
+        #"Get initial parameters from one of the available clients."
         # Server-side parameter initialization
         parameters: Optional[Parameters] = self.strategy.initialize_parameters(
             client_manager=self._client_manager
@@ -152,7 +188,7 @@ class ScaffoldServer(Server):
     ) -> Optional[
         Tuple[Optional[Parameters], Dict[str, Scalar], FitResultsAndFailures]
     ]:
-        """Perform a single round of federated averaging."""
+        "Perform a single round of federated averaging."
         # Get clients and their respective instructions from strateg
         client_instructions = self.strategy.configure_fit(
             server_round=server_round,
@@ -225,7 +261,7 @@ class ScaffoldServer(Server):
         # metrics
         metrics_aggregated = aggregated_result[1]
         return parameters_updated, metrics_aggregated, (results, failures)
-
+"""
 
 def update_parameters_with_cv(
     parameters: Parameters, s_cv: List[torch.Tensor]
