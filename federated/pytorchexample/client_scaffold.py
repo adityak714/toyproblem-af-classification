@@ -60,20 +60,26 @@ class FlowerClientScaffold(fl.client.NumPyClient):
     
     def get_parameters(self, config: Dict[str, Scalar]):
         """Return the current local model parameters."""
-        return [val.detach().cpu().numpy() for val in self.net.parameters()]
+        return [val.detach().cpu().numpy() for _, val in self.net.named_parameters()]
 
     def set_parameters(self, parameters):
         """Set the local model parameters using given ones."""
         #params_dict = zip(list(self.net.state_dict().keys()), parameters)
         #state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
-        params_list = list(self.net.parameters())
-        if len(parameters) != len(params_list):
-            raise ValueError(f"Expected {len(params_list)} but got {len(parameters)}")
+        #params_list = list(self.net.parameters())
+        #if len(parameters) != len(params_list):
+        #    raise ValueError(f"Expected {len(params_list)} but got {len(parameters)}")
+        #with torch.no_grad():
+        #    for i, param in enumerate(params_list):
+        #        param.copy_(torch.as_tensor(parameters[i]).to(param.device))
+         
+        state_dict = self.net.state_dict()
+        params_list = [k for k, _ in self.net.named_parameters()]
+
+        for k, v in zip(params_list, parameters):
+            state_dict[k] =  torch.tensor(v, dtype=state_dict[k].dtype)
         
-        with torch.no_grad():
-            for i, param in enumerate(params_list):
-                param.copy_(torch.as_tensor(parameters[i]).to(param.device))
-        #self.net.load_state_dict(state_dict, strict=True)
+        self.net.load_state_dict(state_dict, strict=True)
 
     def fit(self, parameters, config: Dict[str, Scalar]):
         """Implement distributed fit function for a given client for SCAFFOLD."""

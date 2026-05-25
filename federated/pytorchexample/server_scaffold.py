@@ -63,12 +63,11 @@ class ScaffoldStrategy(FedAvg):
             )
         ]
         # Aggregate parameters
-        """
         parameters_aggregated = aggregate(weights_results)
         """
         param_updates = [update[0] for update in weights_results]
         parameters_aggregated = [np.mean(layer, axis=0) for layer in zip(*param_updates)]
-
+        """
 
         # Zip client_cv_updates and num_examples
         client_cv_updates_and_num_examples = [
@@ -77,12 +76,12 @@ class ScaffoldStrategy(FedAvg):
                 combined_parameters_all_updates, num_examples_all_updates
             )
         ]
-        """
         aggregated_cv_update = aggregate(client_cv_updates_and_num_examples)
         """
         cv_updates = [update[0] for update in client_cv_updates_and_num_examples]
         aggregated_cv_update = [np.mean(layer, axis=0) for layer in zip(*cv_updates)]
 
+        """
         # Aggregate custom metrics if aggregation fn was provided
         metrics_aggregated = {}
         if self.fit_metrics_aggregation_fn:

@@ -29,14 +29,14 @@ def main() -> None:
     num_rounds: int = 60 #context.run_config["num-server-rounds"]
     fraction_fit: float = 1.0 #context.run_config["fraction-fit"]
     fraction_evaluate: float = 0.5 #context.run_config["fraction-evaluate"]
-    lr: float = 0.0001 #context.run_config["learning-rate"]
+    lr: float = 0.001 #context.run_config["learning-rate"]
     batch_size: int = 256 #context.run_config["batch-size"]
     stratname = "scaffold" #context.run_config["strategy"]
     val = 0.25 #context.run_config["val"] # alpha value for dirichl-based partitioning
-    local_epochs: int = 2 #context.run_config["local-epochs"]
+    local_epochs: int = 5 #context.run_config["local-epochs"]
     
     os.environ["CURR_FLWR_SESSION_ID"] = unique_id
-    with open(f"tmp-tester-scaffold-uniformavg-fix-server.txt", 'w') as f:
+    with open(f"tmp-scaffold-d{val}-lr{lr}-frac{fraction_fit}.txt", 'w') as f:
         print("CURR_FLWR_SESSION_ID set as", os.environ["CURR_FLWR_SESSION_ID"])
         filetree = f"./runs/{today}-{unique_id}"
         f.write(filetree)
